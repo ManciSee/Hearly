@@ -5,3 +5,8 @@ pydantic
 aiofiles
 boto3
 python-dotenv
+authlib
+requests
+werkzeug
+email_validator
+pydantic-settings
