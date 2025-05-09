@@ -12,6 +12,23 @@ function App() {
   const [registeredUsername, setRegisteredUsername] = useState<string | null>(
     null
   );
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userTokens, setUserTokens] = useState(null);
+
+  // Controlla se l'utente è già loggato all'avvio
+  useState(() => {
+    const storedTokens = localStorage.getItem("auth_tokens");
+    if (storedTokens) {
+      try {
+        const tokens = JSON.parse(storedTokens);
+        setUserTokens(tokens);
+        setIsLoggedIn(true);
+      } catch (e) {
+        console.error("Errore nel parsing dei token:", e);
+        localStorage.removeItem("auth_tokens");
+      }
+    }
+  });
 
   const handleUploadSuccess = () => {
     // Aggiorna la lista dei file dopo un caricamento
@@ -21,6 +38,18 @@ function App() {
   const handleRegistrationSuccess = (username: string) => {
     setRegisteredUsername(username);
     setCurrentPage("verify");
+  };
+
+  const handleLoginSuccess = (tokens: any) => {
+    setUserTokens(tokens);
+    setIsLoggedIn(true);
+    setCurrentPage("home");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_tokens");
+    setUserTokens(null);
+    setIsLoggedIn(false);
   };
 
   return (
@@ -49,18 +78,29 @@ function App() {
                     Home
                   </button>
                 </li>
-                <li>
-                  <button
-                    className={`text-white px-4 py-2 rounded-lg ${
-                      currentPage === "auth" || currentPage === "verify"
-                        ? "bg-blue-700"
-                        : "hover:bg-blue-700"
-                    }`}
-                    onClick={() => setCurrentPage("auth")}
-                  >
-                    Accedi / Registrati
-                  </button>
-                </li>
+                {isLoggedIn ? (
+                  <li>
+                    <button
+                      className="text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      onClick={handleLogout}
+                    >
+                      Logout
+                    </button>
+                  </li>
+                ) : (
+                  <li>
+                    <button
+                      className={`text-white px-4 py-2 rounded-lg ${
+                        currentPage === "auth" || currentPage === "verify"
+                          ? "bg-blue-700"
+                          : "hover:bg-blue-700"
+                      }`}
+                      onClick={() => setCurrentPage("auth")}
+                    >
+                      Accedi / Registrati
+                    </button>
+                  </li>
+                )}
               </ul>
             </nav>
           </div>
@@ -94,7 +134,10 @@ function App() {
             </div>
           </div>
         ) : currentPage === "auth" ? (
-          <Auth onRegistrationSuccess={handleRegistrationSuccess} />
+          <Auth
+            onRegistrationSuccess={handleRegistrationSuccess}
+            onLoginSuccess={handleLoginSuccess}
+          />
         ) : (
           <VerifyAccountPage initialUsername={registeredUsername} />
         )}

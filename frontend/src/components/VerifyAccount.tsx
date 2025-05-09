@@ -12,7 +12,6 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
   });
 
   useEffect(() => {
-    // Se non c'è un username passato come prop, prova a prenderlo dal localStorage
     if (!initialUsername) {
       const savedUsername = localStorage.getItem("temp_username");
       if (savedUsername) {
@@ -50,7 +49,6 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
       setSuccess("Account verificato con successo! Ora puoi accedere.");
       console.log("Success:", response.data);
 
-      // Pulisci l'username temporaneo dal localStorage dopo la verifica
       localStorage.removeItem("temp_username");
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {

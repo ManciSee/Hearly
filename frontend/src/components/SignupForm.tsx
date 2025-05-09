@@ -7,16 +7,18 @@ interface SignupFormProps {
 
 export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
   const [formData, setFormData] = useState({
-    full_name: "",
+    first_name: "",
+    last_name: "",
+    username: "",
     email: "",
     phone_number: "",
     password: "",
-    role: "user",
     birthdate: "",
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -26,12 +28,27 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
       ...prev,
       [name]: value,
     }));
+
+    if (name === "username") {
+      setUsernameError(null);
+    }
+  };
+
+  const validateUsername = (username: string) => {
+    const usernameRegex = /^[a-zA-Z0-9_]{4,}$/;
+    return usernameRegex.test(username);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Formato internazionale per il numero di telefono
+    if (!validateUsername(formData.username)) {
+      setUsernameError(
+        "L'username deve contenere almeno 4 caratteri e può includere solo lettere, numeri e underscore"
+      );
+      return;
+    }
+
     let formattedPhoneNumber = formData.phone_number;
     if (!formattedPhoneNumber.startsWith("+")) {
       formattedPhoneNumber = `+${formattedPhoneNumber}`;
@@ -49,11 +66,9 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
         }
       );
 
-      // Salva l'username nella sessione o stato
       const username = response.data.username;
       localStorage.setItem("temp_username", username);
 
-      // Reindirizza alla pagina di verifica tramite la funzione di callback
       onRegistrationSuccess(username);
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
@@ -83,22 +98,68 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
       )}
 
       <form onSubmit={handleSubmit}>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label
+              htmlFor="first_name"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Nome
+            </label>
+            <input
+              id="first_name"
+              type="text"
+              name="first_name"
+              value={formData.first_name}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="last_name"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Cognome
+            </label>
+            <input
+              id="last_name"
+              type="text"
+              name="last_name"
+              value={formData.last_name}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+        </div>
+
         <div className="mb-4">
           <label
-            htmlFor="full_name"
+            htmlFor="username"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Nome completo
+            Username
           </label>
           <input
-            id="full_name"
+            id="username"
             type="text"
-            name="full_name"
-            value={formData.full_name}
+            name="username"
+            value={formData.username}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full px-3 py-2 border ${
+              usernameError ? "border-red-500" : "border-gray-300"
+            } rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
             required
           />
+          {usernameError && (
+            <p className="mt-1 text-sm text-red-500">{usernameError}</p>
+          )}
+          <p className="mt-1 text-xs text-gray-500">
+            Scegli un username univoco. Può contenere lettere, numeri e
+            underscore.
+          </p>
         </div>
 
         <div className="mb-4">

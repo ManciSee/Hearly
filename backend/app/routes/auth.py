@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, status
 
-from ..models.user import UserSignup, UserVerify
+from ..models.user import UserSignup, UserVerify, UserSignin
 from ..services.auth import AuthService
 from ..controllers.cognito import AWSCognito
 
@@ -19,6 +19,6 @@ async def signup(user: UserSignup, cognito: AWSCognito = Depends(get_aws_cognito
 async def verify_account(data: UserVerify, cognito: AWSCognito = Depends(get_aws_cognito)):
     return AuthService.verify_account(data, cognito)
 
-# @auth_router.post()
-# async def signin():
-#     pass
+@auth_router.post('/signin', status_code=status.HTTP_200_OK, tags=['Auth'])
+async def signin(data: UserSignin, cognito: AWSCognito = Depends(get_aws_cognito)):
+    return AuthService.signin(data, cognito)

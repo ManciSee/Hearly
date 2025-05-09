@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 class AuthService:
     def signup(user: UserSignup, cognito: AWSCognito):
         try:
-            # Log dei dati di input (escludendo la password)
             logger.info(f"Tentativo di registrazione per: {user.email}")
             
             response = cognito.sign_up(user)
@@ -23,7 +22,7 @@ class AuthService:
                 content = {
                     "message": "User signed up successfully",
                     "user_sub": response['UserSub'],
-                    "username": response['username']  # Aggiungi l'username alla risposta
+                    "username": user.username  # Usa l'username scelto dall'utente
                 }
                 return JSONResponse(status_code=201, content=content)
             else:
@@ -40,7 +39,7 @@ class AuthService:
             logger.error(f"AWS Cognito error: {error_code} - {error_message}")
             
             if error_code == 'UsernameExistsException':
-                raise HTTPException(status_code=409, detail="Email already registered")
+                raise HTTPException(status_code=409, detail="Username o email già registrati")
             elif error_code == 'InvalidParameterException':
                 raise HTTPException(status_code=400, detail=error_message)
             elif error_code == 'InvalidPasswordException':
@@ -70,5 +69,27 @@ class AuthService:
         except Exception as e:
             logger.exception(f"Errore durante la verifica dell'account: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
-        
-    # def sign_in(data: UserSignin, cognito: AWSCognito):
+    
+    def signin(data: UserSignin, cognito: AWSCognito):
+        try:
+            logger.info(f"Tentativo di login per: {data.username}")
+            
+            response = cognito.sign_in(data.username, data.password)
+            
+            if 'AuthenticationResult' in response:
+                content = {
+                    "message": "Login successful",
+                    "access_token": response['AuthenticationResult']['AccessToken'],
+                    "refresh_token": response['AuthenticationResult'].get('RefreshToken'),
+                    "id_token": response['AuthenticationResult']['IdToken'],
+                    "expires_in": response['AuthenticationResult']['ExpiresIn'],
+                    "token_type": response['AuthenticationResult']['TokenType']
+                }
+                return JSONResponse(status_code=200, content=content)
+            else:
+                logger.error(f"Risposta da Cognito non valida: {response}")
+                raise HTTPException(status_code=500, detail="Invalid response from authentication service")
+                
+        except Exception as e:
+            logger.exception(f"Errore durante il login: {str(e)}")
+            raise HTTPException(status_code=401, detail=str(e))
