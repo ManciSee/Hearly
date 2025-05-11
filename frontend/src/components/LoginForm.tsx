@@ -20,7 +20,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       const response = await axios.post(
         "http://localhost:8000/api/v1/auth/signin",
         {
-          username: identifier, // Può essere email o username
+          username: identifier,
           password: password,
         }
       );
@@ -31,11 +31,10 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(
-          err.response.data.detail ||
-            "Si è verificato un errore durante il login"
+          err.response.data.detail || "An error occurred while logging in"
         );
       } else {
-        setError("Errore nella richiesta di login");
+        setError("Login request error");
       }
       console.error("Error:", err);
     } finally {
@@ -46,7 +45,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-        Accedi
+        Login
       </h2>
 
       {error && (
@@ -61,7 +60,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
             htmlFor="identifier"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Email o Username
+            Email or Username
           </label>
           <input
             id="identifier"
@@ -97,7 +96,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
             loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
-          {loading ? "Accesso in corso..." : "Accedi"}
+          {loading ? "Logging in..." : "Accedi"}
         </button>
       </form>
     </div>

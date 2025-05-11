@@ -3,7 +3,9 @@
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 import botocore
+import boto3
 import logging
+import os
 
 from ..controllers.cognito import AWSCognito
 from ..models.user import UserSignup, UserVerify, UserSignin
@@ -11,26 +13,35 @@ from ..models.user import UserSignup, UserVerify, UserSignin
 # Configurazione del logger
 logger = logging.getLogger(__name__)
 
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
+users_table = dynamodb.Table('users')
+
 class AuthService:
     def signup(user: UserSignup, cognito: AWSCognito):
         try:
-            logger.info(f"Tentativo di registrazione per: {user.email}")
-            
+            logger.info(f"Attempting to register for: {user.email}")
             response = cognito.sign_up(user)
-            
             if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                users_table.put_item(Item={
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "phone_number": user.phone_number,
+                    "birthdate": user.birthdate,
+                })
                 content = {
                     "message": "User signed up successfully",
                     "user_sub": response['UserSub'],
-                    "username": user.username  # Usa l'username scelto dall'utente
+                    "username": user.username
                 }
                 return JSONResponse(status_code=201, content=content)
             else:
-                logger.error(f"Risposta da Cognito non valida: {response}")
+                logger.error(f"Invalid response from Cognito: {response}")
                 raise HTTPException(status_code=500, detail="Invalid response from authentication service")
                 
         except botocore.exceptions.ParamValidationError as e:
-            logger.error(f"Errore di validazione dei parametri: {str(e)}")
+            logger.error(f"Parameter validation error: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Parameter validation error: {str(e)}")
             
         except botocore.exceptions.ClientError as e:
@@ -39,7 +50,7 @@ class AuthService:
             logger.error(f"AWS Cognito error: {error_code} - {error_message}")
             
             if error_code == 'UsernameExistsException':
-                raise HTTPException(status_code=409, detail="Username o email già registrati")
+                raise HTTPException(status_code=409, detail="Username or email already registered")
             elif error_code == 'InvalidParameterException':
                 raise HTTPException(status_code=400, detail=error_message)
             elif error_code == 'InvalidPasswordException':
@@ -53,7 +64,7 @@ class AuthService:
     
     def verify_account(data: UserVerify, cognito: AWSCognito):
         try:
-            logger.info(f"Tentativo di verifica per username: {data.username}")
+            logger.info(f"Attempting to verify username: {data.username}")
             
             response = cognito.verify_account(data.username, data.confirmation_code)
             
@@ -63,16 +74,16 @@ class AuthService:
                 }
                 return JSONResponse(status_code=200, content=content)
             else:
-                logger.error(f"Risposta da Cognito non valida: {response}")
+                logger.error(f"Invalid response from Cognito: {response}")
                 raise HTTPException(status_code=500, detail="Invalid response from authentication service")
                 
         except Exception as e:
-            logger.exception(f"Errore durante la verifica dell'account: {str(e)}")
+            logger.exception(f"Error while verifying account: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
     
     def signin(data: UserSignin, cognito: AWSCognito):
         try:
-            logger.info(f"Tentativo di login per: {data.username}")
+            logger.info(f"Attempting to login for: {data.username}")
             
             response = cognito.sign_in(data.username, data.password)
             
@@ -91,5 +102,5 @@ class AuthService:
                 raise HTTPException(status_code=500, detail="Invalid response from authentication service")
                 
         except Exception as e:
-            logger.exception(f"Errore durante il login: {str(e)}")
+            logger.exception(f"Error while logging in: {str(e)}")
             raise HTTPException(status_code=401, detail=str(e))

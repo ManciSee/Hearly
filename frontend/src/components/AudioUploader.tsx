@@ -35,7 +35,27 @@ export function AudioUploader({ onUploadSuccess }: AudioUploaderProps) {
     formData.append("file", file);
 
     try {
-      await axios.post("http://localhost:8000/upload/", formData);
+      // Ottieni il token JWT dal localStorage
+      const authTokens = localStorage.getItem("auth_tokens");
+      let token = null;
+
+      if (authTokens) {
+        token = JSON.parse(authTokens).access_token;
+      }
+
+      if (!token) {
+        setError("Sessione scaduta, effettua nuovamente il login");
+        setIsUploading(false);
+        return;
+      }
+
+      // Includi il token nell'header Authorization
+      await axios.post("http://localhost:8000/upload/", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       setFile(null);
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

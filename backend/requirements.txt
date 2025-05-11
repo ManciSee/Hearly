@@ -10,3 +10,4 @@ requests
 werkzeug
 email_validator
 pydantic-settings
+python-jose

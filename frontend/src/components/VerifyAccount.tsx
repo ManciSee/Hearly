@@ -46,18 +46,17 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
         formData
       );
 
-      setSuccess("Account verificato con successo! Ora puoi accedere.");
+      setSuccess("Account verified successfully! You can now log in.");
       console.log("Success:", response.data);
 
       localStorage.removeItem("temp_username");
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(
-          err.response.data.detail ||
-            "Si è verificato un errore durante la verifica"
+          err.response.data.detail || "An error occurred during verification"
         );
       } else {
-        setError("Errore nella richiesta di verifica");
+        setError("Verification request error");
       }
       console.error("Error:", err);
     } finally {
@@ -68,7 +67,7 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-        Verifica Account
+        Verify Account
       </h2>
 
       {success && (
@@ -100,10 +99,7 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
-          <p className="mt-1 text-xs text-gray-500">
-            Inserisci l'username (formato: user_xxxxxxxx) che hai ricevuto dopo
-            la registrazione
-          </p>
+          <p className="mt-1 text-xs text-gray-500">Enter the username</p>
         </div>
 
         <div className="mb-4">
@@ -111,7 +107,7 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
             htmlFor="confirmation_code"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Codice di verifica
+            Verification code
           </label>
           <input
             id="confirmation_code"
@@ -124,7 +120,7 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
             autoFocus
           />
           <p className="mt-1 text-xs text-gray-500">
-            Inserisci il codice di verifica ricevuto via email
+            Enter the verification code received by email
           </p>
         </div>
 
@@ -135,7 +131,7 @@ export function VerifyAccount({ initialUsername = null }: VerifyAccountProps) {
             loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
-          {loading ? "Verifica in corso..." : "Verifica Account"}
+          {loading ? "Checking..." : "Verify Account"}
         </button>
       </form>
     </div>

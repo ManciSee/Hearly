@@ -23,7 +23,7 @@ class AWSCognito:
         
     def _calculate_secret_hash(self, username):
         """
-        Calcola il SECRET_HASH usando HMAC SHA256
+        Calculate SECRET_HASH using HMAC SHA256
         """
         message = username + self.client_id
         dig = hmac.new(
@@ -54,6 +54,10 @@ class AWSCognito:
                 'Name': 'family_name',
                 'Value': user.last_name
             },
+            {
+            'Name': 'name',
+            'Value': f"{user.first_name} {user.last_name}"
+            }
         ]
         
         
@@ -75,7 +79,7 @@ class AWSCognito:
     
     def verify_account(self, username: str, confirmation_code: str):
         """
-        Verifica l'account utente tramite codice di conferma
+        Verify user account via confirmation code
         """
         secret_hash = self._calculate_secret_hash(username)
         
@@ -88,17 +92,17 @@ class AWSCognito:
             )
             return response
         except self.client.exceptions.CodeMismatchException:
-            raise Exception("Codice di verifica non valido")
+            raise Exception("Invalid verification code")
         except self.client.exceptions.ExpiredCodeException:
-            raise Exception("Il codice di verifica è scaduto")
+            raise Exception("Verification code has expired")
         except self.client.exceptions.UserNotFoundException:
-            raise Exception("Utente non trovato")
+            raise Exception("User not found")
         except Exception as e:
-            raise Exception(f"Errore durante la verifica dell'account: {str(e)}")
+            raise Exception(f"Error while verifying account: {str(e)}")
 
     def sign_in(self, username: str, password: str):
         """
-        Effettua il login dell'utente
+        Log in user
         """
         secret_hash = self._calculate_secret_hash(username)
         
@@ -114,10 +118,10 @@ class AWSCognito:
             )
             return response
         except self.client.exceptions.UserNotFoundException:
-            raise Exception("Utente non trovato")
+            raise Exception("User not found")
         except self.client.exceptions.NotAuthorizedException:
-            raise Exception("Credenziali non valide")
+            raise Exception("Invalid credentials")
         except self.client.exceptions.UserNotConfirmedException:
-            raise Exception("Account non verificato")
+            raise Exception("Account not verified")
         except Exception as e:
-            raise Exception(f"Errore durante il login: {str(e)}")
+            raise Exception(f"Error while logging in: {str(e)}")

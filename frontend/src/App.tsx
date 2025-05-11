@@ -59,9 +59,9 @@ function App() {
         <div className="container mx-auto py-6 px-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-4xl font-bold">Audio Cloud</h1>
+              <h1 className="text-4xl font-bold">Hearly</h1>
               <p className="mt-2 text-blue-100">
-                Piattaforma di trascrizione e analisi audio
+                Audio transcription cloud platform
               </p>
             </div>
             <nav>
@@ -97,7 +97,7 @@ function App() {
                       }`}
                       onClick={() => setCurrentPage("auth")}
                     >
-                      Accedi / Registrati
+                      Login / Sign Up
                     </button>
                   </li>
                 )}
@@ -116,8 +116,8 @@ function App() {
                 Carica un file audio
               </h2>
               <p className="text-gray-600 mb-6">
-                Carica i tuoi file audio per ottenere trascrizioni e riassunti
-                automatici. Supportiamo formati MP3, WAV e M4A.
+                Upload your audio files to get automatic transcriptions and
+                summaries. We support MP3, WAV and M4A formats.
               </p>
               <AudioUploader onUploadSuccess={handleUploadSuccess} />
             </div>
@@ -127,7 +127,7 @@ function App() {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold">I tuoi file</h2>
                 <span className="text-sm text-gray-500">
-                  Aggiornato in tempo reale
+                  Updated in real time
                 </span>
               </div>
               <FileList key={refreshKey} />
@@ -146,7 +146,7 @@ function App() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white mt-10 py-6">
         <div className="container mx-auto px-4 text-center">
-          <p>© 2025 Audio Cloud - Piattaforma di elaborazione audio</p>
+          <p>© 2025 Hearly - Audio transcription cloud platform</p>
         </div>
       </footer>
     </div>

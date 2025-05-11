@@ -73,11 +73,10 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(
-          err.response.data.detail ||
-            "Si è verificato un errore durante la registrazione"
+          err.response.data.detail || "An error occurred while registering"
         );
       } else {
-        setError("Errore nella richiesta di registrazione");
+        setError("Error in registration request");
       }
       console.error("Error:", err);
     } finally {
@@ -88,7 +87,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-        Registrati
+        Sign Up
       </h2>
 
       {error && (
@@ -104,7 +103,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
               htmlFor="first_name"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Nome
+              Name
             </label>
             <input
               id="first_name"
@@ -121,7 +120,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
               htmlFor="last_name"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Cognome
+              Surname
             </label>
             <input
               id="last_name"
@@ -157,8 +156,8 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
             <p className="mt-1 text-sm text-red-500">{usernameError}</p>
           )}
           <p className="mt-1 text-xs text-gray-500">
-            Scegli un username univoco. Può contenere lettere, numeri e
-            underscore.
+            Choose a unique username. It can contain letters, numbers and
+            underscores.
           </p>
         </div>
 
@@ -185,7 +184,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
             htmlFor="phone_number"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Numero di telefono (con prefisso internazionale)
+            Telephone number (with international prefix)
           </label>
           <input
             id="phone_number"
@@ -203,7 +202,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
             htmlFor="birthdate"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Data di nascita
+            Date of birth
           </label>
           <input
             id="birthdate"
@@ -246,7 +245,7 @@ export function SignupForm({ onRegistrationSuccess }: SignupFormProps) {
             loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
-          {loading ? "Registrazione in corso..." : "Registrati"}
+          {loading ? "Registration in progress..." : "Registrati"}
         </button>
       </form>
     </div>
