@@ -1,13 +1,16 @@
+##
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from app.controllers import files
 from app.routes.auth import auth_router
 import uvicorn
-from dotenv import load_dotenv
 import logging
 
 load_dotenv()
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(title="Hearly", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# UPLOAD_DIR = "uploads"
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Includi i router dei controller
 app.include_router(files.router)

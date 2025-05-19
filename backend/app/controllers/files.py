@@ -8,6 +8,8 @@ import time
 from app.services.file import save_file, list_uploaded_files, get_file_transcription
 from ..utils.auth import get_username_from_token
 
+from app.services import ServiceLLM
+
 router = APIRouter()
 
 lambda_client = boto3.client(
@@ -155,3 +157,75 @@ def get_transcription(
         return transcription
     
     return JSONResponse(status_code=404, content={"detail": "Trascrizione non trovata"})
+
+@router.get("/summarize/{file_id}")
+def summarize_transcription(
+    file_id: str,
+    authorization: str = Header(None),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    
+    token = authorization.split(" ")[1]
+    username = get_username_from_token(token)
+    
+    # Otteniamo prima la trascrizione
+    transcription_data = get_file_transcription(file_id, username)
+    
+    if not transcription_data or not transcription_data.get("transcription"):
+        return JSONResponse(status_code=404, content={"detail": "Trascrizione non trovata"})
+    
+    try:
+        # Inizializziamo il service LLM
+        llm_service = ServiceLLM()
+        
+        # Otteniamo il riassunto
+        summary = llm_service.summarize(transcription_data["transcription"])
+        
+        # Restituiamo il riassunto
+        return {
+            "summary": summary,
+            "file_id": file_id
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in summarization request: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error in summarization request: {str(e)}")
+
+# @router.get("/summarize/{file_id}")
+# def summarize_transcription(
+#     file_id: str,
+#     authorization: str = Header(None),
+# ):
+#     if not authorization or not authorization.startswith("Bearer "):
+#         raise HTTPException(status_code=401, detail="Missing token")
+    
+#     token = authorization.split(" ")[1]
+#     username = get_username_from_token(token)
+    
+#     # Otteniamo prima la trascrizione
+#     transcription_data = get_file_transcription(file_id, username)
+    
+#     if not transcription_data or not transcription_data.get("transcription"):
+#         return JSONResponse(status_code=404, content={"detail": "Trascrizione non trovata"})
+    
+#     try:
+#         # Inizializziamo il service LLM
+#         llm_service = ServiceLLM()
+        
+#         # Otteniamo il riassunto (anche se non viene salvato su S3)
+#         summary = llm_service.summarize_and_save(
+#             transcription=transcription_data["transcription"],
+#             username=username,
+#             file_id=file_id,
+#         )
+        
+#         # Restituiamo il riassunto al frontend
+#         return {
+#             "summary": summary,
+#             "file_id": file_id
+#         }
+    
+#     except Exception as e:
+#         logger.error(f"Error in summarization request: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Error in summarization request: {str(e)}")

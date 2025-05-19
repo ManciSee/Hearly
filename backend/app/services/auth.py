@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
 users_table = dynamodb.Table('users')
 
-class AuthService:
+class ServiceAuth:
     def signup(user: UserSignup, cognito: AWSCognito):
         try:
             logger.info(f"Attempting to register for: {user.email}")

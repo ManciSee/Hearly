@@ -19,6 +19,9 @@ export function FileList() {
   const [transcriptions, setTranscriptions] = useState<
     Record<string, TranscriptionStatus>
   >({});
+  const [summaries, setSummaries] = useState<{
+    [key: string]: { summary: string; isLoading: boolean };
+  }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +161,62 @@ export function FileList() {
     }
   };
 
+  const getSummary = async (id: string) => {
+    try {
+      // Se il riassunto è già stato caricato, non è necessario ricaricarlo
+      if (summaries[id] && !summaries[id].isLoading) {
+        return;
+      }
+
+      // Impostiamo lo stato di caricamento
+      setSummaries((prev) => ({
+        ...prev,
+        [id]: { summary: "", isLoading: true },
+      }));
+
+      // Otteniamo il token JWT dal localStorage
+      const authTokens = localStorage.getItem("auth_tokens");
+      let token = null;
+
+      if (authTokens) {
+        token = JSON.parse(authTokens).access_token;
+      }
+
+      if (!token) {
+        setError("Sessione scaduta, effettua nuovamente il login");
+        return;
+      }
+
+      // Otteniamo il riassunto
+      const response = await axios.get(
+        `http://localhost:8000/summarize/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // Aggiorniamo lo stato
+      setSummaries((prev) => ({
+        ...prev,
+        [id]: { summary: response.data.summary, isLoading: false },
+      }));
+
+      // Assicuriamoci che la trascrizione sia visibile
+      setSelectedId(id);
+    } catch (err) {
+      console.error("Errore nell'ottenere il riassunto:", err);
+      setSummaries((prev) => ({
+        ...prev,
+        [id]: {
+          summary: "Errore nel generare il riassunto.",
+          isLoading: false,
+        },
+      }));
+    }
+  };
+
   if (isLoading && files.length === 0) {
     return (
       <div className="text-center py-8">
@@ -188,51 +247,88 @@ export function FileList() {
                   <p className="font-medium text-gray-700">{file.filename}</p>
                   <audio controls src={file.url} className="mt-2 w-full" />
                 </div>
-                <button
-                  onClick={() => toggleTranscription(file.id)}
-                  disabled={loadingFiles[file.id]}
-                  className={`ml-4 px-4 py-2 rounded-lg transition ${
-                    loadingFiles[file.id]
-                      ? "bg-gray-400 text-white cursor-not-allowed"
+                <div className="flex ml-4">
+                  <button
+                    onClick={() => toggleTranscription(file.id)}
+                    disabled={loadingFiles[file.id]}
+                    className={`px-4 py-2 rounded-lg transition mr-2 ${
+                      loadingFiles[file.id]
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : selectedId === file.id
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                  >
+                    {loadingFiles[file.id]
+                      ? "Processing..."
                       : selectedId === file.id
-                      ? "bg-red-600 hover:bg-red-700 text-white"
-                      : "bg-blue-600 hover:bg-blue-700 text-white"
-                  }`}
-                >
-                  {loadingFiles[file.id]
-                    ? "Processing..."
-                    : selectedId === file.id
-                    ? "Hide"
-                    : transcriptions[file.id]?.transcription
-                    ? "Show transcript"
-                    : "Transcribe"}
-                </button>
+                      ? "Hide"
+                      : transcriptions[file.id]?.transcription
+                      ? "Show transcript"
+                      : "Transcribe"}
+                  </button>
+
+                  {/* Pulsante di riassunto - visibile solo se la trascrizione è disponibile */}
+                  {transcriptions[file.id]?.status === "COMPLETED" && (
+                    <button
+                      onClick={() => getSummary(file.id)}
+                      disabled={summaries[file.id]?.isLoading}
+                      className={`px-4 py-2 rounded-lg transition ${
+                        summaries[file.id]?.isLoading
+                          ? "bg-gray-400 text-white cursor-not-allowed"
+                          : "bg-green-600 hover:bg-green-700 text-white"
+                      }`}
+                    >
+                      {summaries[file.id]?.isLoading
+                        ? "Generating..."
+                        : "Summarize"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {selectedId === file.id && (
-                <div className="mt-4 p-3 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap">
-                  <strong>Transcription: </strong>
+                <div className="mt-4">
+                  <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap">
+                    <strong>Transcription: </strong>
 
-                  {transcriptions[file.id]?.status === "COMPLETED" ? (
-                    <p className="mt-2">
-                      {transcriptions[file.id]?.transcription}
-                    </p>
-                  ) : transcriptions[file.id]?.status === "ERROR" ||
-                    transcriptions[file.id]?.status === "FAILED" ? (
-                    <p className="mt-2 text-red-600">
-                      Error during transcription. Retry!
-                    </p>
-                  ) : (
-                    <div className="mt-2">
-                      <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent mr-2"></div>
-                      <span>
-                        Transcription in progress...
-                        {transcriptions[file.id]?.message && (
-                          <span className="text-xs text-gray-500 ml-1">
-                            ({transcriptions[file.id]?.message})
-                          </span>
-                        )}
-                      </span>
+                    {transcriptions[file.id]?.status === "COMPLETED" ? (
+                      <p className="mt-2">
+                        {transcriptions[file.id]?.transcription}
+                      </p>
+                    ) : transcriptions[file.id]?.status === "ERROR" ||
+                      transcriptions[file.id]?.status === "FAILED" ? (
+                      <p className="mt-2 text-red-600">
+                        Error during transcription. Retry!
+                      </p>
+                    ) : (
+                      <div className="mt-2">
+                        <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent mr-2"></div>
+                        <span>
+                          Transcription in progress...
+                          {transcriptions[file.id]?.message && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({transcriptions[file.id]?.message})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mostriamo il riassunto se disponibile */}
+                  {summaries[file.id]?.summary && (
+                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-gray-800 whitespace-pre-wrap">
+                      <strong>Summary: </strong>
+
+                      {summaries[file.id]?.isLoading ? (
+                        <div className="mt-2">
+                          <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-r-transparent mr-2"></div>
+                          <span>Generating summary...</span>
+                        </div>
+                      ) : (
+                        <p className="mt-2">{summaries[file.id]?.summary}</p>
+                      )}
                     </div>
                   )}
                 </div>

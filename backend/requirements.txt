@@ -11,3 +11,9 @@ werkzeug
 email_validator
 pydantic-settings
 python-jose
+langchain-openai
+langchain-community
+langchain-core
+langchain
+openai
+azure-ai-inference
