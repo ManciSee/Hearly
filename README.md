@@ -9,6 +9,9 @@
 
 The platform allows users to upload audio files, which are processed through a distributed pipeline built on **Amazon Web Services (AWS)**. Transcriptions are performed using AWS speech recognition services, while summaries are generated via **OpenAI on Azure**.
 
+## 🔗 Architecture and Functioning of the Hearly Pipeline
+![Hearly](https://github.com/user-attachments/assets/e1842e61-e290-48d9-aee4-4e706e7333be)
+
 ## 👥 Authors
 <a href="https://github.com/ManciSee">
   <img src="https://avatars.githubusercontent.com/u/80248296?v=4" style="width:60px; height:60px; border-radius: 50%; margin-right: 40px;">
