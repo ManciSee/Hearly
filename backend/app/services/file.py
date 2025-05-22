@@ -97,7 +97,9 @@ from fastapi import HTTPException
 from dotenv import load_dotenv
 import logging
 import json
-
+import hashlib
+import time
+import mimetypes
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -106,7 +108,8 @@ load_dotenv()
 aws_region = os.getenv("AWS_REGION", "").replace('"', '')
 bucket_name = os.getenv("S3_BUCKET_NAME", "").replace('"', '')
 output_bucket = os.getenv("S3_OUTPUT_BUCKET", "cc-transcribe-output")
-
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
+files_table = dynamodb.Table('files')
 try:
     s3 = boto3.client(
         's3',
@@ -122,6 +125,12 @@ except Exception as e:
 async def save_file(file, username):
     file_id = str(uuid4())
     file_key = f"{username}/{file_id}_{file.filename}"
+    extension = os.path.splitext(file.filename)[-1].lower()
+    upload_time = int(time.time())
+# Leggi contenuto per calcolare hash
+    file_bytes = await file.read()
+    file.file.seek(0)  # reset puntatore
+    sha256_hash = hashlib.sha256(file_bytes).hexdigest()
 
     try:
         s3.upload_fileobj(
@@ -132,7 +141,20 @@ async def save_file(file, username):
 
         file_url = f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{file_key}"
         logger.info(f"File uploaded successfully: {file_key}")
+         # Salvataggio su DynamoDB
+        response=files_table.put_item(Item={
+            'user_id': username,
+            'file_id': file_id,
+            'filename': file.filename,  # Aggiungo il filename per comodità
+            'extension': extension,
+            'upload_time': upload_time,
+            'hash': sha256_hash,
+            'duration': None,
+            'status': 'PENDING',
+            'url': file_url  # Aggiungo anche l'URL per comodità
 
+        })
+        logger.info(f"File metadata saved to DynamoDB: {response}")
         return {"filename": file.filename, "id": file_id, "url": file_url}
     
     except NoCredentialsError:
@@ -159,19 +181,63 @@ async def save_file(file, username):
             detail=f"Error loading file: {str(e)}")
 
 def list_uploaded_files(username):
+    """
+    Lista i file caricati da un utente leggendo da DynamoDB
+    per ottenere tutti i metadati incluso lo status
+    """
     try:
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=f"{username}/")
+        # Query DynamoDB per ottenere tutti i file dell'utente
+        response = files_table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(username),
+            ScanIndexForward=False  # Ordina per upload_time decrescente (più recenti prima)
+        )
+        
         files = []
-        for obj in response.get('Contents', []):
-            key = obj['Key']
-            if "/" in key and "_" in key:
-                _, file_id_filename = key.split("/", 1)
-                file_id, filename = file_id_filename.split("_", 1)
-                file_url = f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{key}"
-                files.append({"id": file_id, "filename": filename, "url": file_url})
+        for item in response.get('Items', []):
+            file_data = {
+                "id": item['file_id'],
+                "filename": item.get('filename', 'Unknown'),
+                "status": item.get('status', 'UNKNOWN'),
+                "upload_time": item.get('upload_time'),
+                "extension": item.get('extension', ''),
+                "duration": item.get('duration'),
+                "url": item.get('url')
+            }
+            files.append(file_data)
+        
+        logger.info(f"Retrieved {len(files)} files for user {username}")
         return files
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error retrieving files from DynamoDB: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving files: {str(e)}")
+def update_file_status(username: str, file_id: str, status: str, duration: int = None):
+    """
+    Aggiorna lo status di un file in DynamoDB
+    """
+    try:
+        update_expression = "SET #status = :status"
+        expression_attribute_names = {"#status": "status"}
+        expression_attribute_values = {":status": status}
+        
+        if duration is not None:
+            update_expression += ", duration = :duration"
+            expression_attribute_values[":duration"] = duration
+        
+        files_table.update_item(
+            Key={
+                'user_id': username,
+                'file_id': file_id
+            },
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+        logger.info(f"Updated file {file_id} status to {status}")
+        
+    except Exception as e:
+        logger.error(f"Error updating file status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating file status: {str(e)}")
 
 def get_file_transcription(file_id: str, username: str):
     """
