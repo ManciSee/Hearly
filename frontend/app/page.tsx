@@ -1,8 +1,43 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, FileText, Headphones, Sparkles } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ArrowRight, FileText, Headphones, Sparkles, LogOut, BarChart2, Settings, Home } from "lucide-react"
 
 export default function HomePage() {
+  const router = useRouter()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [username, setUsername] = useState<string | null>(null)
+  const [initials, setInitials] = useState<string>("U")
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+    // Check if user is logged in
+    const authTokens = localStorage.getItem("auth_tokens")
+    if (authTokens) {
+      setIsLoggedIn(true)
+      try {
+        // In a real implementation, you would get the user's name from the token
+        // For now, we'll just set a placeholder
+        setUsername("Utente")
+        setInitials("U")
+      } catch (error) {
+        console.error("Error parsing auth tokens:", error)
+      }
+    }
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_tokens")
+    setIsLoggedIn(false)
+    router.push("/")
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -15,12 +50,54 @@ export default function HomePage() {
             <span className="text-xl font-bold text-blue-600">Hearly</span>
           </div>
           <div className="flex items-center space-x-4">
-            <Link href="/login">
-              <Button variant="ghost">Accedi</Button>
-            </Link>
-            <Link href="/signup">
-              <Button>Registrati</Button>
-            </Link>
+            {isClient && isLoggedIn ? (
+              <>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 p-0">
+                      <Avatar>
+                        <AvatarFallback className="bg-blue-100 text-blue-600">{initials}</AvatarFallback>
+                      </Avatar>
+                      <span className="sr-only">Profilo utente</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard" className="cursor-pointer flex items-center">
+                        <Home className="h-4 w-4 mr-2" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/statistics" className="cursor-pointer flex items-center">
+                        <BarChart2 className="h-4 w-4 mr-2" />
+                        Statistiche
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/account" className="cursor-pointer flex items-center">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Impostazioni
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost">Accedi</Button>
+                </Link>
+                <Link href="/signup">
+                  <Button>Registrati</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -34,17 +111,28 @@ export default function HomePage() {
             di riconoscimento vocale.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Link href="/signup">
-              <Button size="lg" className="px-8 bg-blue-600 hover:bg-blue-700">
-                Prova gratis
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline" className="px-8">
-                Accedi
-              </Button>
-            </Link>
+            {isClient && isLoggedIn ? (
+              <Link href="/dashboard">
+                <Button size="lg" className="px-8 bg-blue-600 hover:bg-blue-700">
+                  Vai alla dashboard
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup">
+                  <Button size="lg" className="px-8 bg-blue-600 hover:bg-blue-700">
+                    Prova gratis
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" className="px-8">
+                    Accedi
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -90,13 +178,23 @@ export default function HomePage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-6">Pronto a iniziare?</h2>
           <p className="text-xl mb-8 max-w-2xl mx-auto">
-            Registrati oggi e ottieni 60 minuti di trascrizione gratuita.
+            {isClient && isLoggedIn
+              ? "Torna alla dashboard per gestire le tue trascrizioni."
+              : "Registrati oggi e ottieni 60 minuti di trascrizione gratuita."}
           </p>
-          <Link href="/signup">
-            <Button size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 border-white">
-              Inizia ora
-            </Button>
-          </Link>
+          {isClient && isLoggedIn ? (
+            <Link href="/dashboard">
+              <Button size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 border-white">
+                Vai alla dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/signup">
+              <Button size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 border-white">
+                Inizia ora
+              </Button>
+            </Link>
+          )}
         </div>
       </section>
 

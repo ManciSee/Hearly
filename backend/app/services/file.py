@@ -100,6 +100,7 @@ import json
 import hashlib
 import time
 import mimetypes
+import io
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ def update_file_status(username: str, file_id: str, status: str, duration: int =
 
 def get_file_transcription(file_id: str, username: str):
     """
-    Retrieve the transcription for a given file ID from S3.
+    Retrieve the transcription for a given file ID from S3, and save the language used.
     """
     output_bucket = os.getenv("S3_OUTPUT_BUCKET", "cc-transcribe-output")
     key = f"{username}/{file_id}.json"
@@ -251,21 +252,31 @@ def get_file_transcription(file_id: str, username: str):
         content = response['Body'].read().decode('utf-8')
         transcription_data = json.loads(content)
         
-        # Extract the transcription from the JSON data
+        # Estrai lingua e trascrizione
+        language = transcription_data.get('results', {}).get('language_code', 'und')
+        transcript = ""
         if 'results' in transcription_data and 'transcripts' in transcription_data['results']:
-            transcript = transcription_data['results']['transcripts'][0]['transcript']
-            return {
-                "transcription": transcript,
-                "status": "COMPLETED",
-                "file_id": file_id
-            }
-        else:
-            return {
-                "transcription": "The transcript format is invalid",
-                "status": "ERROR",
-                "file_id": file_id
-            }
+            transcript = transcription_data['results']['transcripts'][0].get('transcript', '')
         
+        # Salva la lingua in DynamoDB
+        files_table.update_item(
+            Key={
+                'user_id': username,
+                'file_id': file_id
+            },
+            UpdateExpression="SET #lang = :language",
+            ExpressionAttributeNames={"#lang": "language"},
+            ExpressionAttributeValues={":language": language}
+        )
+        logger.info(f"Lingua rilevata salvata: {language} per file {file_id}")
+        
+        return {
+            "transcription": transcript,
+            "language": language,
+            "status": "COMPLETED",
+            "file_id": file_id
+        }
+    
     except s3.exceptions.NoSuchKey:
         return None
     except Exception as e:
@@ -275,3 +286,5 @@ def get_file_transcription(file_id: str, username: str):
             "status": "ERROR",
             "file_id": file_id
         }
+    
+

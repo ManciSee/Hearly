@@ -5,11 +5,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Settings, LogOut, Headphones, User } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { LogOut, Headphones, BarChart2, Settings, Home } from "lucide-react"
 
 export default function DashboardHeader() {
   const router = useRouter()
   const [username, setUsername] = useState<string | null>(null)
+  const [initials, setInitials] = useState<string>("U")
 
   useEffect(() => {
     // Check if user is logged in
@@ -23,6 +25,13 @@ export default function DashboardHeader() {
       // You might want to extract the username from the token or from a user profile API
       // For now, we'll just set a placeholder
       setUsername("Utente")
+      setInitials("U")
+
+      // In a real implementation, you would get the user's name and set the initials
+      // For example:
+      // const user = JSON.parse(authTokens).user
+      // setUsername(user.username)
+      // setInitials(`${user.first_name.charAt(0)}${user.last_name.charAt(0)}`)
     } catch (error) {
       console.error("Error parsing auth tokens:", error)
     }
@@ -44,23 +53,31 @@ export default function DashboardHeader() {
         </Link>
 
         <div className="flex items-center space-x-4">
-          {username && (
-            <div className="hidden md:flex items-center text-sm text-gray-600">
-              <User className="h-4 w-4 mr-1" />
-              <span>{username}</span>
-            </div>
-          )}
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Settings className="h-5 w-5" />
-                <span className="sr-only">Impostazioni</span>
+              <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 p-0">
+                <Avatar>
+                  <AvatarFallback className="bg-blue-100 text-blue-600">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="sr-only">Profilo utente</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link href="/account" className="cursor-pointer">
+                <Link href="/dashboard" className="cursor-pointer flex items-center">
+                  <Home className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/statistics" className="cursor-pointer flex items-center">
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Statistiche
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/account" className="cursor-pointer flex items-center">
+                  <Settings className="h-4 w-4 mr-2" />
                   Impostazioni
                 </Link>
               </DropdownMenuItem>

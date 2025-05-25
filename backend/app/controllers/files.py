@@ -7,11 +7,12 @@ import logging
 import time
 from app.services.file import save_file, list_uploaded_files, get_file_transcription
 from ..utils.auth import get_username_from_token
-
+from boto3.dynamodb.conditions import Attr
 from app.services import ServiceLLM
 
 router = APIRouter()
-
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
+files_table = dynamodb.Table('files')
 lambda_client = boto3.client(
     'lambda',
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
@@ -191,6 +192,56 @@ def summarize_transcription(
     except Exception as e:
         logger.error(f"Error in summarization request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error in summarization request: {str(e)}")
+
+
+@router.get("/users/{username}/language-distribution")
+async def get_language_distribution(username: str):
+    try:
+        # Query per recuperare tutte le trascrizioni dell'utente con status 'completed'
+        response = files_table.scan(
+            FilterExpression=Attr("user_id").eq(username) & Attr("status").eq("COMPLETED")
+        )
+        items = response.get("Items", [])
+
+        if not items:
+            return JSONResponse(
+                content={
+                    "username": username,
+                    "total_transcriptions": 0,
+                    "languages": {},
+                    "message": "Nessuna trascrizione completata trovata."
+                }
+            )
+
+        # Conta totale trascrizioni
+        total_transcriptions = len(items)
+
+        # Calcola la distribuzione linguistica aggregando le trascrizioni
+        language_counts = {}
+        for item in items:
+            lang = item.get("language", "unknown")
+            language_counts[lang] = language_counts.get(lang, 0) + 1
+
+        # Calcola percentuali
+        language_distribution = {
+            lang: round((count / total_transcriptions) * 100, 2)
+            for lang, count in language_counts.items()
+        }
+
+        return JSONResponse(
+            content={
+                "username": username,
+                "total_transcriptions": total_transcriptions,
+                "languages": language_distribution,
+                "message": "Dati ottenuti con successo"
+            }
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Errore interno al server: {str(e)}"},
+        )
 
 # @router.get("/summarize/{file_id}")
 # def summarize_transcription(

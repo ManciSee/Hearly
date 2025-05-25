@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import axios from "axios"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Eye, Download, FileText, Trash2 } from "lucide-react"
+import { Loader2, Eye, Download, FileText } from "lucide-react"
 
 type AudioFile = {
   id: string
@@ -197,26 +197,26 @@ export default function FileList() {
   }
 
   const toggleTranscription = (id: string) => {
-    if (selectedId === id) {
-      setSelectedId(null)
-    } else {
-      const file = files.find((f) => f.id === id)
-      const fileStatus = file?.status || "PENDING"
-      const transcriptionData = transcriptions[id]
-      const hasTranscriptionText = transcriptionData?.transcription
+  if (selectedId === id) {
+    setSelectedId(null)
+  } else {
+    const file = files.find((f) => f.id === id)
+    const fileStatus = file?.status || "PENDING"
+    const transcriptionData = transcriptions[id]
+    const hasTranscriptionText = transcriptionData?.transcription
 
-      if (fileStatus === "PENDING" && !transcriptionData) {
-        // Se il file è in stato PENDING e non ha una trascrizione, avvia la trascrizione
-        startTranscription(id)
-      } else if (transcriptionData?.status === "COMPLETED" && hasTranscriptionText) {
-        // Se la trascrizione è già completata E abbiamo il testo in memoria, mostra/nascondi
-        setSelectedId(id)
-      } else if (fileStatus !== "PENDING") {
-        // Se il file è stato trascritto ma non abbiamo la trascrizione in memoria, recuperala da S3
-        fetchTranscription(id)
-      }
+    if (fileStatus === "PENDING" && !transcriptionData) {
+      // Se il file è in stato PENDING e non ha una trascrizione, avvia la trascrizione
+      startTranscription(id)
+    } else if (transcriptionData?.status === "COMPLETED" && hasTranscriptionText) {
+      // Se la trascrizione è già completata E abbiamo il testo in memoria, mostra/nascondi
+      setSelectedId(id)
+    } else if (fileStatus !== "PENDING") {
+      // Se il file è stato trascritto ma non abbiamo la trascrizione in memoria, recuperala da S3
+      fetchTranscription(id)
     }
   }
+}
 
   const getSummary = async (id: string) => {
     try {
@@ -316,77 +316,47 @@ export default function FileList() {
                           Trascrivi
                         </Button>
                       ) : (
-                        // Altrimenti mostra una serie di bottoni di azione
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => toggleTranscription(file.id)}
-                            disabled={isProcessing}
-                            className={selectedId === file.id ? "bg-gray-100" : ""}
-                            title={selectedId === file.id ? "Nascondi trascrizione" : "Mostra trascrizione"}
-                          >
-                            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                            <span className="sr-only">{selectedId === file.id ? "Nascondi" : "Visualizza"}</span>
-                          </Button>
-
-                          {isTranscribed && (
+                        // Altrimenti mostra i bottoni per visualizzare/nascondere la trascrizione
+                        <Button
+                          onClick={() => toggleTranscription(file.id)}
+                          disabled={isProcessing}
+                          variant={selectedId === file.id ? "destructive" : "default"}
+                        >
+                          {isProcessing ? (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  // Funzionalità per scaricare la trascrizione
-                                  const transcriptionText = transcriptions[file.id]?.transcription || ""
-                                  const blob = new Blob([transcriptionText], { type: "text/plain" })
-                                  const url = URL.createObjectURL(blob)
-                                  const a = document.createElement("a")
-                                  a.href = url
-                                  a.download = `${file.filename.replace(/\.[^/.]+$/, "")}_trascrizione.txt`
-                                  document.body.appendChild(a)
-                                  a.click()
-                                  document.body.removeChild(a)
-                                  URL.revokeObjectURL(url)
-                                }}
-                                title="Scarica trascrizione"
-                              >
-                                <FileText className="h-4 w-4" />
-                                <span className="sr-only">Scarica trascrizione</span>
-                              </Button>
-
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => getSummary(file.id)}
-                                disabled={summaries[file.id]?.isLoading}
-                                title="Genera riassunto"
-                              >
-                                {summaries[file.id]?.isLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
-                                )}
-                                <span className="sr-only">Riassumi</span>
-                              </Button>
-
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  if (confirm("Sei sicuro di voler eliminare questo file?")) {
-                                    // Implementa qui la logica per eliminare il file
-                                    console.log("Eliminazione file:", file.id)
-                                  }
-                                }}
-                                title="Elimina file"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Elimina</span>
-                              </Button>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Elaborazione...
+                            </>
+                          ) : selectedId === file.id ? (
+                            "Nascondi"
+                          ) : (
+                            <>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Mostra trascrizione
                             </>
                           )}
-                        </div>
+                        </Button>
+                      )}
+
+                      {/* Mostra il bottone per il riassunto solo se il file è stato trascritto */}
+                      {isTranscribed && (
+                        <Button
+                          onClick={() => getSummary(file.id)}
+                          disabled={summaries[file.id]?.isLoading}
+                          variant="outline"
+                        >
+                          {summaries[file.id]?.isLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generazione...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-4 w-4" />
+                              Riassumi
+                            </>
+                          )}
+                        </Button>
                       )}
                     </div>
                   </div>
