@@ -174,3 +174,9 @@ cython_debug/
 .pypirc
 
 usage.txt
+
+.DS_Store
+
+/.next/
+
+secrets.yml

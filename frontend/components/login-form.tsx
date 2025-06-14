@@ -1,62 +1,75 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import axios from "axios"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle } from "lucide-react"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { config } from "@/lib/config";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface LoginFormProps {
-  onLoginSuccess?: (tokens: any) => void
+  onLoginSuccess?: (tokens: any) => void;
 }
 
 export default function LoginForm({ onLoginSuccess }: LoginFormProps = {}) {
-  const router = useRouter()
-  const [identifier, setIdentifier] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter();
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
     try {
-      const response = await axios.post("http://localhost:8000/api/v1/auth/signin", {
+      const response = await axios.post(`${config.apiUrl}/api/v1/auth/signin`, {
         username: identifier,
         password: password,
-      })
+      });
 
-      localStorage.setItem("auth_tokens", JSON.stringify(response.data))
+      localStorage.setItem("auth_tokens", JSON.stringify(response.data));
 
       if (onLoginSuccess) {
-        onLoginSuccess(response.data)
+        onLoginSuccess(response.data);
       } else {
-        router.push("/dashboard")
+        router.push("/dashboard");
       }
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.detail || "Si è verificato un errore durante l'accesso")
+        setError(
+          err.response.data.detail ||
+            "Si è verificato un errore durante l'accesso"
+        );
       } else {
-        setError("Errore nella richiesta di login")
+        setError("Errore nella richiesta di login");
       }
-      console.error("Error:", err)
+      console.error("Error:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg border-0">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">Accedi a Hearly</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">
+          Accedi a Hearly
+        </CardTitle>
         <CardDescription className="text-center">
           Inserisci le tue credenziali per accedere alla piattaforma
         </CardDescription>
@@ -101,7 +114,11 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps = {}) {
             />
           </div>
 
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -125,11 +142,14 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps = {}) {
 
         <p className="text-center text-sm text-gray-600">
           Non hai un account?{" "}
-          <a href="/signup" className="font-medium text-blue-600 hover:text-blue-800">
+          <a
+            href="/signup"
+            className="font-medium text-blue-600 hover:text-blue-800"
+          >
             Registrati
           </a>
         </p>
       </CardFooter>
     </Card>
-  )
+  );
 }

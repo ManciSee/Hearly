@@ -9,6 +9,10 @@ from app.services.file import save_file, list_uploaded_files, get_file_transcrip
 from ..utils.auth import get_username_from_token
 from boto3.dynamodb.conditions import Attr
 from app.services import ServiceLLM
+from botocore.exceptions import ClientError
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
@@ -46,7 +50,31 @@ def get_files(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Missing token")
     token = authorization.split(" ")[1]
     username = get_username_from_token(token)
-    return list_uploaded_files(username)
+    
+    try:
+        files_data = list_uploaded_files(username)
+        
+        # Genera URL firmati per ogni file
+        bucket_name = os.getenv("S3_BUCKET_NAME", "").replace('"', '')
+        
+        for file in files_data:
+            if file.get('url'):
+                # Estrai la chiave dall'URL esistente
+                object_key = f"{username}/{file['id']}_{file['filename']}"
+                signed_url = generate_presigned_url(bucket_name, object_key, expiration=7200)  # 2 ore
+                
+                if signed_url:
+                    file['url'] = signed_url
+                    logger.info(f"Generated signed URL for {object_key}")
+                else:
+                    logger.warning(f"Failed to generate signed URL for {object_key}")
+                    file['url'] = None
+                
+        return files_data
+        
+    except Exception as e:
+        logger.error(f"Errore nel recupero dei file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Errore nel recupero dei file")
 
 @router.post("/transcribe/{file_id}")
 async def transcribe_file(
@@ -59,15 +87,41 @@ async def transcribe_file(
     username = get_username_from_token(token)
     
     try:
+        # Prima recupera i metadati del file da DynamoDB
+        try:
+            response = files_table.get_item(
+                Key={
+                    'user_id': username,
+                    'file_id': file_id
+                }
+            )
+            
+            if 'Item' not in response:
+                raise HTTPException(status_code=404, detail="File not found in database")
+                
+            file_item = response['Item']
+            filename = file_item.get('filename')
+            
+            if not filename:
+                raise HTTPException(status_code=404, detail="Filename not found in database")
+                
+        except Exception as e:
+            logger.error(f"Error retrieving file metadata: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error retrieving file metadata")
+        
+        # Costruisci la chiave del file
         bucket_name = os.getenv("S3_BUCKET_NAME", "cc-bucket-audio")
+        file_key = f"{username}/{file_id}_{filename}"
+        
+        # Verifica che il file esista su S3
         s3 = boto3.client('s3')
-        
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=f"{username}/{file_id}_")
-        items = response.get("Contents", [])
-        if not items:
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        file_key = items[0]["Key"]
+        try:
+            s3.head_object(Bucket=bucket_name, Key=file_key)
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                raise HTTPException(status_code=404, detail=f"File not found in S3: {file_key}")
+            else:
+                raise HTTPException(status_code=500, detail=f"Error accessing S3: {str(e)}")
         
         # Lambda payload
         payload = {
@@ -92,7 +146,8 @@ async def transcribe_file(
             return {
                 "status": "processing",
                 "job_name": body.get('job_name'),
-                "file_id": file_id
+                "file_id": file_id,
+                "file_key": file_key  # Aggiungi per debug
             }
         else:
             raise HTTPException(
@@ -100,6 +155,9 @@ async def transcribe_file(
                 detail="Error starting transcription"
             )
     
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Error in transcription request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error in transcription request: {str(e)}")
@@ -243,40 +301,24 @@ async def get_language_distribution(username: str):
             content={"message": f"Errore interno al server: {str(e)}"},
         )
 
-# @router.get("/summarize/{file_id}")
-# def summarize_transcription(
-#     file_id: str,
-#     authorization: str = Header(None),
-# ):
-#     if not authorization or not authorization.startswith("Bearer "):
-#         raise HTTPException(status_code=401, detail="Missing token")
-    
-#     token = authorization.split(" ")[1]
-#     username = get_username_from_token(token)
-    
-#     # Otteniamo prima la trascrizione
-#     transcription_data = get_file_transcription(file_id, username)
-    
-#     if not transcription_data or not transcription_data.get("transcription"):
-#         return JSONResponse(status_code=404, content={"detail": "Trascrizione non trovata"})
-    
-#     try:
-#         # Inizializziamo il service LLM
-#         llm_service = ServiceLLM()
+def generate_presigned_url(bucket_name: str, object_key: str, expiration: int = 3600):
+    """
+    Genera un URL firmato per accedere a un oggetto S3
+    """
+    try:
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name=os.getenv("AWS_REGION", "").replace('"', '')
+        )
         
-#         # Otteniamo il riassunto (anche se non viene salvato su S3)
-#         summary = llm_service.summarize_and_save(
-#             transcription=transcription_data["transcription"],
-#             username=username,
-#             file_id=file_id,
-#         )
-        
-#         # Restituiamo il riassunto al frontend
-#         return {
-#             "summary": summary,
-#             "file_id": file_id
-#         }
-    
-#     except Exception as e:
-#         logger.error(f"Error in summarization request: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"Error in summarization request: {str(e)}")
+        response = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket_name, 'Key': object_key},
+            ExpiresIn=expiration
+        )
+        return response
+    except ClientError as e:
+        logger.error(f"Errore nella generazione dell'URL firmato: {e}")
+        return None
