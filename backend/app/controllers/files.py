@@ -1,3 +1,4 @@
+###
 from fastapi import APIRouter, File, UploadFile, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 import json
@@ -12,9 +13,12 @@ from app.services import ServiceLLM
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
+
+
 load_dotenv()
 
 router = APIRouter()
+
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "").replace('"', ''))
 files_table = dynamodb.Table('files')
 lambda_client = boto3.client(
@@ -54,12 +58,10 @@ def get_files(authorization: str = Header(None)):
     try:
         files_data = list_uploaded_files(username)
         
-        # Genera URL firmati per ogni file
         bucket_name = os.getenv("S3_BUCKET_NAME", "").replace('"', '')
         
         for file in files_data:
             if file.get('url'):
-                # Estrai la chiave dall'URL esistente
                 object_key = f"{username}/{file['id']}_{file['filename']}"
                 signed_url = generate_presigned_url(bucket_name, object_key, expiration=7200)  # 2 ore
                 
@@ -87,7 +89,6 @@ async def transcribe_file(
     username = get_username_from_token(token)
     
     try:
-        # Prima recupera i metadati del file da DynamoDB
         try:
             response = files_table.get_item(
                 Key={
@@ -109,11 +110,9 @@ async def transcribe_file(
             logger.error(f"Error retrieving file metadata: {str(e)}")
             raise HTTPException(status_code=500, detail="Error retrieving file metadata")
         
-        # Costruisci la chiave del file
         bucket_name = os.getenv("S3_BUCKET_NAME", "cc-bucket-audio")
         file_key = f"{username}/{file_id}_{filename}"
         
-        # Verifica che il file esista su S3
         s3 = boto3.client('s3')
         try:
             s3.head_object(Bucket=bucket_name, Key=file_key)
@@ -123,7 +122,6 @@ async def transcribe_file(
             else:
                 raise HTTPException(status_code=500, detail=f"Error accessing S3: {str(e)}")
         
-        # Lambda payload
         payload = {
             "body": {
                 "bucket": bucket_name,
@@ -132,7 +130,6 @@ async def transcribe_file(
             }
         }
         
-        # Invoke Lambda function
         lambda_response = lambda_client.invoke(
             FunctionName=os.getenv("LAMBDA_FUNCTION_NAME", "lambda-audio-transcribe"),
             InvocationType='RequestResponse',
@@ -147,7 +144,7 @@ async def transcribe_file(
                 "status": "processing",
                 "job_name": body.get('job_name'),
                 "file_id": file_id,
-                "file_key": file_key  # Aggiungi per debug
+                "file_key": file_key  
             }
         else:
             raise HTTPException(
@@ -156,7 +153,6 @@ async def transcribe_file(
             )
     
     except HTTPException:
-        # Re-raise HTTPExceptions as-is
         raise
     except Exception as e:
         logger.error(f"Error in transcription request: {str(e)}")
@@ -176,12 +172,10 @@ def get_transcription(
     
     if check_status:
         try:
-            # Try to get the recently transcription job 
             jobs_response = transcribe_client.list_transcription_jobs(
                 MaxResults=100
             )
             
-            # Search for the transcription job that matches the file_id
             target_key = f"{username}/{file_id}.json"
             matching_jobs = [
                 job for job in jobs_response.get('TranscriptionJobSummaries', [])
@@ -228,20 +222,20 @@ def summarize_transcription(
     token = authorization.split(" ")[1]
     username = get_username_from_token(token)
     
-    # Otteniamo prima la trascrizione
     transcription_data = get_file_transcription(file_id, username)
     
     if not transcription_data or not transcription_data.get("transcription"):
         return JSONResponse(status_code=404, content={"detail": "Trascrizione non trovata"})
     
     try:
-        # Inizializziamo il service LLM
         llm_service = ServiceLLM()
         
-        # Otteniamo il riassunto
-        summary = llm_service.summarize(transcription_data["transcription"])
+        summary = llm_service.summarize_and_save(
+            transcription_data["transcription"], 
+            username, 
+            file_id
+        )
         
-        # Restituiamo il riassunto
         return {
             "summary": summary,
             "file_id": file_id
@@ -255,7 +249,6 @@ def summarize_transcription(
 @router.get("/users/{username}/language-distribution")
 async def get_language_distribution(username: str):
     try:
-        # Query per recuperare tutte le trascrizioni dell'utente con status 'completed'
         response = files_table.scan(
             FilterExpression=Attr("user_id").eq(username) & Attr("status").eq("COMPLETED")
         )
@@ -271,16 +264,13 @@ async def get_language_distribution(username: str):
                 }
             )
 
-        # Conta totale trascrizioni
         total_transcriptions = len(items)
 
-        # Calcola la distribuzione linguistica aggregando le trascrizioni
         language_counts = {}
         for item in items:
             lang = item.get("language", "unknown")
             language_counts[lang] = language_counts.get(lang, 0) + 1
 
-        # Calcola percentuali
         language_distribution = {
             lang: round((count / total_transcriptions) * 100, 2)
             for lang, count in language_counts.items()
@@ -322,3 +312,5 @@ def generate_presigned_url(bucket_name: str, object_key: str, expiration: int = 
     except ClientError as e:
         logger.error(f"Errore nella generazione dell'URL firmato: {e}")
         return None
+    
+

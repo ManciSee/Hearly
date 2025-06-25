@@ -1,94 +1,5 @@
-# import os
-# from uuid import uuid4
-# import boto3
-# from botocore.exceptions import NoCredentialsError, ClientError
-# from fastapi import HTTPException
-# from dotenv import load_dotenv
-# import logging
+###
 
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# load_dotenv()
-
-# aws_region = os.getenv("AWS_REGION", "").replace('"', '')
-# bucket_name = os.getenv("S3_BUCKET_NAME", "").replace('"', '')
-
-# try:
-#     s3 = boto3.client(
-#         's3',
-#         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-#         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-#         region_name=aws_region
-#     )
-#     s3.head_bucket(Bucket=bucket_name)
-#     logger.info(f"Connessione a S3 stabilita, bucket '{bucket_name}' accessibile")
-# except Exception as e:
-#     logger.error(f"Errore nella configurazione di S3: {str(e)}")
-    
-# async def save_file(file, username):
-#     file_id = str(uuid4())
-#     file_key = f"{username}/{file_id}_{file.filename}"
-
-#     try:
-#         s3.upload_fileobj(
-#             file.file,
-#             bucket_name,
-#             file_key,
-#         )
-
-#         file_url = f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{file_key}"
-#         logger.info(f"File caricato con successo: {file_key}")
-
-#         return {"filename": file.filename, "id": file_id, "url": file_url}
-    
-#     except NoCredentialsError:
-#         logger.error("Credenziali AWS non valide o mancanti")
-#         raise HTTPException(status_code=500, detail="Credenziali AWS non valide o mancanti")
-    
-#     except ClientError as e:
-#         error_code = e.response.get('Error', {}).get('Code', 'UnknownError')
-#         error_msg = e.response.get('Error', {}).get('Message', str(e))
-#         logger.error(f"Errore AWS ({error_code}): {error_msg}")
-        
-#         if error_code == "AccessDenied":
-#             raise HTTPException(status_code=500, 
-#                 detail="Accesso negato ad AWS S3. Verificare le autorizzazioni del bucket.")
-#         elif error_code == "NoSuchBucket":
-#             raise HTTPException(status_code=500, 
-#                 detail=f"Il bucket '{bucket_name}' non esiste")
-#         else:
-#             raise HTTPException(status_code=500, 
-#                 detail=f"Errore durante il caricamento su S3: {error_msg}")
-#     except Exception as e:
-#         logger.error(f"Errore generico durante il caricamento: {str(e)}")
-#         raise HTTPException(status_code=500, 
-#             detail=f"Errore durante il caricamento del file: {str(e)}")
-
-# def list_uploaded_files(username):
-#     try:
-#         response = s3.list_objects_v2(Bucket=bucket_name, Prefix=f"{username}/")
-#         files = []
-#         for obj in response.get('Contents', []):
-#             key = obj['Key']
-#             if "/" in key and "_" in key:
-#                 _, file_id_filename = key.split("/", 1)
-#                 file_id, filename = file_id_filename.split("_", 1)
-#                 file_url = f"https://{bucket_name}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{key}"
-#                 files.append({"id": file_id, "filename": filename, "url": file_url})
-#         return files
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-# def get_file_transcription(file_id: str):
-
-#     # Placeholder per la trascrizione
-#     return {"id": file_id, "transcription": f"Trascrizione per il file {file_id}"}
-    
-
-"""
-Lambda function to handle file uploads and transcriptions
-"""
 import os
 from uuid import uuid4
 import boto3
@@ -128,9 +39,8 @@ async def save_file(file, username):
     file_key = f"{username}/{file_id}_{file.filename}"
     extension = os.path.splitext(file.filename)[-1].lower()
     upload_time = int(time.time())
-# Leggi contenuto per calcolare hash
     file_bytes = await file.read()
-    file.file.seek(0)  # reset puntatore
+    file.file.seek(0)  
     sha256_hash = hashlib.sha256(file_bytes).hexdigest()
 
     try:
@@ -142,17 +52,17 @@ async def save_file(file, username):
 
         file_url = f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{file_key}"
         logger.info(f"File uploaded successfully: {file_key}")
-         # Salvataggio su DynamoDB
+
         response=files_table.put_item(Item={
             'user_id': username,
             'file_id': file_id,
-            'filename': file.filename,  # Aggiungo il filename per comodità
+            'filename': file.filename,  
             'extension': extension,
             'upload_time': upload_time,
             'hash': sha256_hash,
             'duration': None,
             'status': 'PENDING',
-            'url': file_url  # Aggiungo anche l'URL per comodità
+            'url': file_url  
 
         })
         logger.info(f"File metadata saved to DynamoDB: {response}")
@@ -187,10 +97,9 @@ def list_uploaded_files(username):
     per ottenere tutti i metadati incluso lo status
     """
     try:
-        # Query DynamoDB per ottenere tutti i file dell'utente
         response = files_table.query(
             KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(username),
-            ScanIndexForward=False  # Ordina per upload_time decrescente (più recenti prima)
+            ScanIndexForward=False  
         )
         
         files = []
@@ -241,9 +150,8 @@ def update_file_status(username: str, file_id: str, status: str, duration: int =
         raise HTTPException(status_code=500, detail=f"Error updating file status: {str(e)}")
 
 def get_file_transcription(file_id: str, username: str):
-    """
-    Retrieve the transcription for a given file ID from S3, and save the language used.
-    """
+    """ Recupera la trascrizione di un file da S3 e aggiorna i metadati in DynamoDB """
+
     output_bucket = os.getenv("S3_OUTPUT_BUCKET", "cc-transcribe-output")
     key = f"{username}/{file_id}.json"
     
@@ -252,13 +160,11 @@ def get_file_transcription(file_id: str, username: str):
         content = response['Body'].read().decode('utf-8')
         transcription_data = json.loads(content)
         
-        # Estrai lingua e trascrizione
         language = transcription_data.get('results', {}).get('language_code', 'und')
         transcript = ""
         if 'results' in transcription_data and 'transcripts' in transcription_data['results']:
             transcript = transcription_data['results']['transcripts'][0].get('transcript', '')
         
-        # Salva la lingua in DynamoDB
         files_table.update_item(
             Key={
                 'user_id': username,
@@ -286,5 +192,31 @@ def get_file_transcription(file_id: str, username: str):
             "status": "ERROR",
             "file_id": file_id
         }
-    
+
+async def save_transcription_result(file_id: str, username: str, transcription: str, detected_language: str = None):
+    """
+    Salva il risultato della trascrizione e aggiorna i metadati
+    """
+    try:
+        update_expression = "SET #status = :status"
+        expression_attribute_names = {"#status": "status"}
+        expression_attribute_values = {":status": "COMPLETED"}
+        
+        if detected_language:
+            update_expression += ", detected_language = :lang"
+            expression_attribute_values[":lang"] = detected_language
+        
+        files_table.update_item(
+            Key={'user_id': username, 'file_id': file_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+        
+        logger.info(f"Transcription result saved for file {file_id}")
+        
+    except Exception as e:
+        logger.error(f"Error saving transcription result: {str(e)}")
+        raise
+
 
