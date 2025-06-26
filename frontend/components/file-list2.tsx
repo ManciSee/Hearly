@@ -41,8 +41,6 @@ export default function FileList() {
 
   const fetchFiles = async () => {
     try {
-      setIsLoading(true);
-
       const authTokens = localStorage.getItem("auth_tokens");
       let token = null;
 
@@ -75,7 +73,6 @@ export default function FileList() {
       setTranscriptions((prev) => ({ ...prev, ...initialTranscriptions }));
       setError(null);
     } catch (err) {
-      console.error("Error retrieving files: ", err);
       setError("Impossibile caricare la lista dei file");
     } finally {
       setIsLoading(false);
@@ -121,7 +118,6 @@ export default function FileList() {
 
       pollTranscriptionStatus(id, token);
     } catch (err) {
-      console.error("Errore nell'avvio della trascrizione:", err);
       setError("Impossibile avviare la trascrizione");
       setLoadingFiles((prev) => ({ ...prev, [id]: false }));
     }
@@ -209,7 +205,6 @@ export default function FileList() {
 
       setSelectedId(id);
     } catch (err) {
-      console.error("Errore nel recupero della trascrizione:", err);
       setError("Impossibile recuperare la trascrizione");
     } finally {
       setLoadingFiles((prev) => ({ ...prev, [id]: false }));
@@ -277,7 +272,6 @@ export default function FileList() {
 
       setSelectedId(id);
     } catch (err) {
-      console.error("Errore nell'ottenere il riassunto:", err);
       setSummaries((prev) => ({
         ...prev,
         [id]: {

@@ -17,3 +17,4 @@ langchain-core
 langchain
 openai
 azure-ai-inference
+mutagen

@@ -62,11 +62,6 @@ class ServiceLLM:
             return summary
 
         except ClientError as e:
-            print(f"Error saving summary to S3: {e}")
             return "Error generating or saving summary."
         except Exception as e:
-            if "DeploymentNotFound" in str(e):
-                print("Error: Deployment not found. Please check your configuration.")
-            else:
-                print(f"Error generating summary: {e}")
             return "Error generating summary."

@@ -12,6 +12,14 @@ import hashlib
 import time
 import mimetypes
 import io
+import tempfile
+from decimal import Decimal
+from mutagen import File as MutagenFile
+from mutagen.mp3 import MP3
+from mutagen.wave import WAVE
+from mutagen.flac import FLAC
+from mutagen.mp4 import MP4
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,6 +42,8 @@ try:
 except Exception as e:
     logger.error(f"Errore nella configurazione di S3: {str(e)}")
     
+###
+
 async def save_file(file, username):
     file_id = str(uuid4())
     file_key = f"{username}/{file_id}_{file.filename}"
@@ -42,6 +52,8 @@ async def save_file(file, username):
     file_bytes = await file.read()
     file.file.seek(0)  
     sha256_hash = hashlib.sha256(file_bytes).hexdigest()
+    duration_seconds = 0
+    duration_seconds = get_audio_duration(file_bytes, file.filename)
 
     try:
         s3.upload_fileobj(
@@ -60,7 +72,7 @@ async def save_file(file, username):
             'extension': extension,
             'upload_time': upload_time,
             'hash': sha256_hash,
-            'duration': None,
+            'duration': int(duration_seconds) if duration_seconds > 0 else None,
             'status': 'PENDING',
             'url': file_url  
 
@@ -121,6 +133,7 @@ def list_uploaded_files(username):
     except Exception as e:
         logger.error(f"Error retrieving files from DynamoDB: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving files: {str(e)}")
+    
 def update_file_status(username: str, file_id: str, status: str, duration: int = None):
     """
     Aggiorna lo status di un file in DynamoDB
@@ -219,4 +232,89 @@ async def save_transcription_result(file_id: str, username: str, transcription: 
         logger.error(f"Error saving transcription result: {str(e)}")
         raise
 
+def get_audio_duration(file_bytes: bytes, filename: str) -> float:
+    """
+    Calcola la durata di un file audio in secondi
+    """
+    temp_file_path = None
+    try:
+        # Crea un file temporaneo per permettere a mutagen di leggere il file
+        with tempfile.NamedTemporaryFile(suffix=os.path.splitext(filename)[1], delete=False) as temp_file:
+            temp_file.write(file_bytes)
+            temp_file.flush()
+            temp_file_path = temp_file.name
+        
+        # Usa mutagen per ottenere la durata (file ora chiuso)
+        audio_file = MutagenFile(temp_file_path)
+        
+        if audio_file is not None and hasattr(audio_file, 'info'):
+            duration = float(audio_file.info.length)
+            logger.info(f"Durata rilevata per {filename}: {duration:.2f} secondi")
+            return duration
+        else:
+            logger.warning(f"Impossibile rilevare la durata per {filename}")
+            return 0.0
+                
+    except Exception as e:
+        logger.error(f"Errore nel calcolo della durata per {filename}: {str(e)}")
+        return 0.0
+    finally:
+        # Pulizia del file temporaneo
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception as cleanup_error:
+                logger.warning(f"Impossibile eliminare file temporaneo {temp_file_path}: {cleanup_error}")
 
+def get_user_total_duration(username: str) -> dict:
+    """
+    Calcola la durata totale di tutti i file audio di un utente
+    e restituisce la data di trascrizione dell'ultimo audio
+    """
+    try:
+        response = files_table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(username)
+        )
+        
+        total_seconds = 0
+        audio_files_count = 0
+        latest_upload_time = 0
+        
+        for item in response.get('Items', []):
+            if item.get('duration') and item.get('status') == 'COMPLETED':
+                total_seconds += int(item['duration'])
+                audio_files_count += 1
+                
+                # Trova l'upload_time più recente
+                upload_time = int(item.get('upload_time', 0))
+                if upload_time > latest_upload_time:
+                    latest_upload_time = upload_time
+        
+        # Formatta la durata totale
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        
+        # Converti il timestamp dell'ultimo upload in formato leggibile
+        latest_transcription_date = None
+        if latest_upload_time > 0:
+            from datetime import datetime
+            latest_transcription_date = datetime.fromtimestamp(latest_upload_time).strftime('%Y-%m-%d %H:%M:%S')
+        
+        return {
+            "total_seconds": total_seconds,
+            "total_formatted": f"{hours:02d}:{minutes:02d}:{seconds:02d}",
+            "audio_files_count": audio_files_count,
+            "latest_transcription_date": latest_transcription_date,
+            "latest_transcription_timestamp": latest_upload_time if latest_upload_time > 0 else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating total duration: {str(e)}")
+        return {
+            "total_seconds": 0,
+            "total_formatted": "00:00:00",
+            "audio_files_count": 0,
+            "latest_transcription_date": None,
+            "latest_transcription_timestamp": None
+        }

@@ -10,7 +10,15 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Eye, Download, FileText, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Loader2,
+  Eye,
+  Download,
+  FileText,
+  Trash2,
+  AlertCircle,
+} from "lucide-react";
 import { config } from "@/lib/config";
 
 type AudioFile = {
@@ -37,12 +45,13 @@ export default function FileList() {
   }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
+  const [deletingFiles, setDeletingFiles] = useState<Record<string, boolean>>(
+    {}
+  );
   const [error, setError] = useState<string | null>(null);
 
   const fetchFiles = async () => {
     try {
-      setIsLoading(true);
-
       const authTokens = localStorage.getItem("auth_tokens");
       let token = null;
 
@@ -75,7 +84,6 @@ export default function FileList() {
       setTranscriptions((prev) => ({ ...prev, ...initialTranscriptions }));
       setError(null);
     } catch (err) {
-      console.error("Error retrieving files: ", err);
       setError("Impossibile caricare la lista dei file");
     } finally {
       setIsLoading(false);
@@ -121,7 +129,6 @@ export default function FileList() {
 
       pollTranscriptionStatus(id, token);
     } catch (err) {
-      console.error("Errore nell'avvio della trascrizione:", err);
       setError("Impossibile avviare la trascrizione");
       setLoadingFiles((prev) => ({ ...prev, [id]: false }));
     }
@@ -209,10 +216,77 @@ export default function FileList() {
 
       setSelectedId(id);
     } catch (err) {
-      console.error("Errore nel recupero della trascrizione:", err);
       setError("Impossibile recuperare la trascrizione");
     } finally {
       setLoadingFiles((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const deleteFile = async (id: string, filename: string) => {
+    // Conferma prima di eliminare
+    if (
+      !window.confirm(
+        `Sei sicuro di voler eliminare il file "${filename}"? Questa azione non può essere annullata.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setDeletingFiles((prev) => ({ ...prev, [id]: true }));
+
+      const authTokens = localStorage.getItem("auth_tokens");
+      let token = null;
+
+      if (authTokens) {
+        token = JSON.parse(authTokens).access_token;
+      }
+
+      if (!token) {
+        setError("Sessione scaduta, effettua nuovamente il login");
+        return;
+      }
+
+      await axios.post(
+        `${config.apiUrl}/files/${id}/delete`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // Rimuovi il file dalla lista locale
+      setFiles((prev) => prev.filter((file) => file.id !== id));
+
+      // Rimuovi anche i dati associati
+      setTranscriptions((prev) => {
+        const newTranscriptions = { ...prev };
+        delete newTranscriptions[id];
+        return newTranscriptions;
+      });
+
+      setSummaries((prev) => {
+        const newSummaries = { ...prev };
+        delete newSummaries[id];
+        return newSummaries;
+      });
+
+      // Se il file eliminato era quello selezionato, deselezionalo
+      if (selectedId === id) {
+        setSelectedId(null);
+      }
+
+      setError(null);
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        setError(err.response.data.detail || "Impossibile eliminare il file");
+      } else {
+        setError("Impossibile eliminare il file");
+      }
+    } finally {
+      setDeletingFiles((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -277,7 +351,6 @@ export default function FileList() {
 
       setSelectedId(id);
     } catch (err) {
-      console.error("Errore nell'ottenere il riassunto:", err);
       setSummaries((prev) => ({
         ...prev,
         [id]: {
@@ -328,6 +401,7 @@ export default function FileList() {
               const isProcessing =
                 loadingFiles[file.id] ||
                 transcriptions[file.id]?.status === "QUEUED";
+              const isDeleting = deletingFiles[file.id];
 
               return (
                 <div key={file.id} className="border rounded-lg p-4 shadow-sm">
@@ -349,24 +423,23 @@ export default function FileList() {
                         )}
                       </div>
                     </div>
+
                     <div className="flex flex-wrap gap-2">
                       {fileStatus === "PENDING" && !isProcessing ? (
-                        // Mostra solo il bottone "Trascrivi" se lo stato è PENDING
                         <Button
                           onClick={() => toggleTranscription(file.id)}
-                          disabled={isProcessing}
+                          disabled={isProcessing || isDeleting}
                         >
                           <FileText className="mr-2 h-4 w-4" />
                           Trascrivi
                         </Button>
                       ) : (
-                        // Altrimenti mostra una serie di bottoni di azione
                         <div className="flex flex-wrap gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => toggleTranscription(file.id)}
-                            disabled={isProcessing}
+                            disabled={isProcessing || isDeleting}
                             className={
                               selectedId === file.id ? "bg-gray-100" : ""
                             }
@@ -394,7 +467,6 @@ export default function FileList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => {
-                                  // Funzionalità per scaricare la trascrizione
                                   const transcriptionText =
                                     transcriptions[file.id]?.transcription ||
                                     "";
@@ -415,7 +487,7 @@ export default function FileList() {
                                 }}
                                 title="Scarica trascrizione"
                               >
-                                <FileText className="h-4 w-4" />
+                                <Download className="h-4 w-4" />
                                 <span className="sr-only">
                                   Scarica trascrizione
                                 </span>
@@ -425,34 +497,34 @@ export default function FileList() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => getSummary(file.id)}
-                                disabled={summaries[file.id]?.isLoading}
+                                disabled={
+                                  summaries[file.id]?.isLoading || isDeleting
+                                }
                                 title="Genera riassunto"
                               >
                                 {summaries[file.id]?.isLoading ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <Download className="h-4 w-4" />
+                                  <FileText className="h-4 w-4" />
                                 )}
                                 <span className="sr-only">Riassumi</span>
                               </Button>
 
                               <Button
+                                onClick={() =>
+                                  deleteFile(file.id, file.filename)
+                                }
+                                disabled={isProcessing || isDeleting}
                                 variant="ghost"
                                 size="icon"
-                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      "Sei sicuro di voler eliminare questo file?"
-                                    )
-                                  ) {
-                                    // Implementa qui la logica per eliminare il file
-                                    console.log("Eliminazione file:", file.id);
-                                  }
-                                }}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                 title="Elimina file"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {isDeleting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                                 <span className="sr-only">Elimina</span>
                               </Button>
                             </>

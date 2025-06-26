@@ -4,16 +4,18 @@ from fastapi.responses import JSONResponse
 import json
 import os
 import boto3
-import logging
 import time
-from app.services.file import save_file, list_uploaded_files, get_file_transcription
+from app.services.file import save_file, list_uploaded_files, get_file_transcription, get_user_total_duration
 from ..utils.auth import get_username_from_token
 from boto3.dynamodb.conditions import Attr
 from app.services import ServiceLLM
 from botocore.exceptions import ClientError
+from datetime import datetime, timedelta
+from collections import defaultdict
+from decimal import Decimal
 from dotenv import load_dotenv
 
-
+###
 
 load_dotenv()
 
@@ -34,8 +36,6 @@ transcribe_client = boto3.client(
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     region_name=os.getenv("AWS_REGION")
 )
-
-logger = logging.getLogger(__name__)
 
 @router.post("/upload/")
 async def upload_file(
@@ -67,15 +67,12 @@ def get_files(authorization: str = Header(None)):
                 
                 if signed_url:
                     file['url'] = signed_url
-                    logger.info(f"Generated signed URL for {object_key}")
                 else:
-                    logger.warning(f"Failed to generate signed URL for {object_key}")
                     file['url'] = None
                 
         return files_data
         
     except Exception as e:
-        logger.error(f"Errore nel recupero dei file: {str(e)}")
         raise HTTPException(status_code=500, detail="Errore nel recupero dei file")
 
 @router.post("/transcribe/{file_id}")
@@ -107,7 +104,6 @@ async def transcribe_file(
                 raise HTTPException(status_code=404, detail="Filename not found in database")
                 
         except Exception as e:
-            logger.error(f"Error retrieving file metadata: {str(e)}")
             raise HTTPException(status_code=500, detail="Error retrieving file metadata")
         
         bucket_name = os.getenv("S3_BUCKET_NAME", "cc-bucket-audio")
@@ -155,7 +151,6 @@ async def transcribe_file(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in transcription request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error in transcription request: {str(e)}")
 
 @router.get("/transcription/{file_id}")
@@ -202,7 +197,6 @@ def get_transcription(
                 return {"status": "UNKNOWN", "message": "Job di trascrizione non trovato"}
                 
         except Exception as e:
-            logger.error(f"Error checking transcription status: {str(e)}")
             return {"status": "ERROR", "message": f"Error checking status: {str(e)}"}
 
     transcription = get_file_transcription(file_id, username)
@@ -242,13 +236,13 @@ def summarize_transcription(
         }
     
     except Exception as e:
-        logger.error(f"Error in summarization request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error in summarization request: {str(e)}")
 
 
 @router.get("/users/{username}/language-distribution")
 async def get_language_distribution(username: str):
     try:
+        # Query per recuperare tutte le trascrizioni dell'utente con status 'completed'
         response = files_table.scan(
             FilterExpression=Attr("user_id").eq(username) & Attr("status").eq("COMPLETED")
         )
@@ -264,13 +258,16 @@ async def get_language_distribution(username: str):
                 }
             )
 
+        # Conta totale trascrizioni
         total_transcriptions = len(items)
 
+        # Calcola la distribuzione linguistica aggregando le trascrizioni
         language_counts = {}
         for item in items:
             lang = item.get("language", "unknown")
             language_counts[lang] = language_counts.get(lang, 0) + 1
 
+        # Calcola percentuali
         language_distribution = {
             lang: round((count / total_transcriptions) * 100, 2)
             for lang, count in language_counts.items()
@@ -291,6 +288,11 @@ async def get_language_distribution(username: str):
             content={"message": f"Errore interno al server: {str(e)}"},
         )
 
+@router.get("/users/{username}/total-duration")
+async def get_total_duration(username: str):
+    return get_user_total_duration(username)
+
+
 def generate_presigned_url(bucket_name: str, object_key: str, expiration: int = 3600):
     """
     Genera un URL firmato per accedere a un oggetto S3
@@ -310,7 +312,170 @@ def generate_presigned_url(bucket_name: str, object_key: str, expiration: int = 
         )
         return response
     except ClientError as e:
-        logger.error(f"Errore nella generazione dell'URL firmato: {e}")
         return None
     
+@router.get("/users/{username}/recent-activity")
+async def get_recent_activity(username: str):
+    """
+    Restituisce l'attività degli upload degli ultimi 30 giorni
+    """
+    try:
+        
+        # Calcola la data di 30 giorni fa
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago_timestamp = int(thirty_days_ago.timestamp())
+        
+        # Query per recuperare tutti i file dell'utente degli ultimi 30 giorni
+        response = files_table.scan(
+            FilterExpression=Attr("user_id").eq(username) & Attr("upload_time").gte(thirty_days_ago_timestamp)
+        )
+        items = response.get("Items", [])
+        
+        # Raggruppa per data
+        daily_counts = defaultdict(int)
+        
+        # Inizializza tutti i giorni degli ultimi 30 con 0
+        for i in range(30):
+            date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
+            daily_counts[date] = 0
+        
+        # Conta gli upload per ogni giorno
+        for item in items:
+            upload_timestamp = item.get("upload_time")
+            if upload_timestamp:
+                # Converti Decimal a int se necessario
+                if isinstance(upload_timestamp, Decimal):
+                    upload_timestamp = int(upload_timestamp)
+                
+                # Converti timestamp in data
+                upload_date = datetime.fromtimestamp(upload_timestamp).strftime('%Y-%m-%d')
+                daily_counts[upload_date] += 1
+        
+        # Converti in lista ordinata per gli ultimi 30 giorni
+        activity_data = []
+        for i in range(29, -1, -1):  # Dal più vecchio al più recente
+            date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
+            day_name = (datetime.utcnow() - timedelta(days=i)).strftime('%d/%m')
+            activity_data.append({
+                "date": date,
+                "day": day_name,
+                "uploads": daily_counts[date]
+            })
+        
+        # Calcola statistiche aggiuntive
+        total_uploads_30_days = sum(daily_counts.values())
+        days_with_activity = sum(1 for count in daily_counts.values() if count > 0)
+        
+        return {
+            "username": username,
+            "period_days": 30,
+            "activity_data": activity_data,
+            "total_uploads": total_uploads_30_days,
+            "active_days": days_with_activity,
+            "message": "Dati attività recuperati con successo"
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Errore interno al server: {str(e)}"}
+        )
 
+@router.post("/files/{file_id}/delete")
+async def delete_file(
+    file_id: str,
+    authorization: str = Header(None)
+):
+    """
+    Elimina un file specifico dell'utente sia da S3 che da DynamoDB
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    
+    token = authorization.split(" ")[1]
+    username = get_username_from_token(token)
+    
+    try:
+        # 1. Prima recupera i metadati del file da DynamoDB per verificare che esista e appartenga all'utente
+        try:
+            response = files_table.get_item(
+                Key={
+                    'user_id': username,
+                    'file_id': file_id
+                }
+            )
+            
+            if 'Item' not in response:
+                raise HTTPException(status_code=404, detail="File not found")
+                
+            file_item = response['Item']
+            filename = file_item.get('filename')
+            
+            if not filename:
+                raise HTTPException(status_code=404, detail="Filename not found in database")
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Error retrieving file metadata")
+        
+        # 2. Elimina il file da S3
+        bucket_name = os.getenv("S3_BUCKET_NAME", "cc-bucket-audio")
+        file_key = f"{username}/{file_id}_{filename}"
+        
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name=os.getenv("AWS_REGION", "").replace('"', '')
+        )
+        
+        try:
+            # Verifica che il file esista prima di eliminarlo
+            s3_client.head_object(Bucket=bucket_name, Key=file_key)
+            
+            # Elimina il file da S3
+            s3_client.delete_object(Bucket=bucket_name, Key=file_key)
+            
+        except Exception as e:
+            # Controlla se è un errore 404 (file non trovato)
+            if hasattr(e, 'response') and e.response.get('Error', {}).get('Code') == '404':
+                # Continua comunque per eliminare il record da DynamoDB
+                pass
+            else:
+                raise HTTPException(status_code=500, detail=f"Error deleting file from S3: {str(e)}")
+        
+        # 3. Elimina anche il file di trascrizione da S3 se esiste
+        transcription_key = f"{username}/{file_id}.json"
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key=transcription_key)
+            s3_client.delete_object(Bucket=bucket_name, Key=transcription_key)
+        except Exception as e:
+            # Controlla se è un errore 404 (file non trovato)
+            if hasattr(e, 'response') and e.response.get('Error', {}).get('Code') == '404':
+                pass
+        
+        # 4. Elimina il record da DynamoDB
+        try:
+            files_table.delete_item(
+                Key={
+                    'user_id': username,
+                    'file_id': file_id
+                }
+            )
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Error deleting file record from database")
+        
+
+        return {
+            "message": "File deleted successfully",
+            "file_id": file_id,
+            "filename": filename
+        }
+    
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error in file deletion: {str(e)}")
