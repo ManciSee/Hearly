@@ -22,20 +22,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/auth@v2
+      - name: Set up Google Cloud SDK with GKE plugin
+        uses: google-github-actions/setup-gcloud@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
 
-      - name: Configure gcloud
+      - name: Configure gcloud and get GKE credentials
         run: |
           gcloud config set project $PROJECT_ID
           gcloud config set compute/zone $GKE_ZONE
-          gcloud container clusters get-credentials $CLUSTER_NAME
+          gcloud container clusters get-credentials $CLUSTER_NAME --zone $GKE_ZONE
 
       - name: Set up Docker auth for Artifact Registry
         run: |
-          gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
+          gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev --quiet
 
       - name: Build & Push Backend image
         run: |
