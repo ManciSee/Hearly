@@ -40,7 +40,7 @@
 #   type: ClusterIP
 
 ### Frontend with static ip
-#test 2
+#test 3
 apiVersion: apps/v1
 kind: Deployment
 metadata:

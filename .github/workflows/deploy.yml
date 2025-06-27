@@ -53,11 +53,11 @@ jobs:
 
       - name: Update image tags in Kubernetes YAML
         run: |
-          sed -i "s|hearly-backend:v.*|hearly-backend:v${{ github.run_number }}|" backend.yml
-          sed -i "s|hearly-frontend:v.*|hearly-frontend:v${{ github.run_number }}|" frontend.yml
+          sed -i "s|hearly-backend:v.*|hearly-backend:v${{ github.run_number }}|" k8s/backend.yml
+          sed -i "s|hearly-frontend:v.*|hearly-frontend:v${{ github.run_number }}|" k8s/frontend.yml
 
       - name: Deploy to GKE
         run: |
-          kubectl apply -f backend.yml
-          kubectl apply -f frontend.yml
-          kubectl apply -f ingress.yml
+          kubectl apply -f k8s/backend.yml
+          kubectl apply -f k8s/frontend.yml
+          kubectl apply -f k8s/ingress.yml
