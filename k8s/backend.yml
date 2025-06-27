@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: hearly-backend
-          image: us-west1-docker.pkg.dev/ccbd-25-sergiomancini/hearly-repo/hearly-backend:v9
+          image: us-west1-docker.pkg.dev/ccbd-25-sergiomancini/hearly-repo/hearly-backend:v14
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

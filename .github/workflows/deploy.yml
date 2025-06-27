@@ -1,0 +1,70 @@
+name: CI/CD Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+  GAR_LOCATION: us-west1
+  BACKEND_IMAGE: ${{ secrets.GCP_PROJECT }}/hearly-repo/hearly-backend
+  FRONTEND_IMAGE: ${{ secrets.GCP_PROJECT }}/hearly-repo/hearly-frontend
+  CLUSTER_NAME: ${{ secrets.GKE_CLUSTER }}
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          export_default_credentials: true
+          install_components: "gke-gcloud-auth-plugin"
+
+      - name: Configure gcloud and get GKE credentials
+        run: |
+          gcloud config set project $PROJECT_ID
+          gcloud config set compute/zone $GKE_ZONE
+          gcloud container clusters get-credentials $CLUSTER_NAME --zone $GKE_ZONE
+
+      - name: Set up Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
+
+      - name: Build & Push Backend image
+        run: |
+          docker build -t $GAR_LOCATION-docker.pkg.dev/$BACKEND_IMAGE:v${{ github.run_number }} ./backend
+          docker push $GAR_LOCATION-docker.pkg.dev/$BACKEND_IMAGE:v${{ github.run_number }}
+
+      - name: Build & Push Frontend image with build-arg NEXT_PUBLIC_API_URL
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            --platform linux/amd64 \
+            -t $GAR_LOCATION-docker.pkg.dev/$FRONTEND_IMAGE:v${{ github.run_number }} \
+            ./frontend
+          docker push $GAR_LOCATION-docker.pkg.dev/$FRONTEND_IMAGE:v${{ github.run_number }}
+
+      - name: Update image tags in Kubernetes YAML
+        run: |
+          sed -i "s|hearly-backend:v.*|hearly-backend:v${{ github.run_number }}|" k8s/backend.yml
+          sed -i "s|hearly-frontend:v.*|hearly-frontend:v${{ github.run_number }}|" k8s/frontend.yml
+
+      - name: Deploy to GKE
+        run: |
+          kubectl apply -f k8s/backend.yml
+          kubectl apply -f k8s/frontend.yml
+          kubectl apply -f k8s/ingress.yml
