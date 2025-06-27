@@ -14,10 +14,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Loader2,
   Eye,
-  Download,
   FileText,
   Trash2,
   AlertCircle,
+  Copy,
 } from "lucide-react";
 import { config } from "@/lib/config";
 
@@ -25,7 +25,7 @@ type AudioFile = {
   id: string;
   filename: string;
   url: string;
-  status?: string; // Aggiungo l'attributo status
+  status?: string;
 };
 
 type TranscriptionStatus = {
@@ -52,6 +52,7 @@ export default function FileList() {
 
   const fetchFiles = async () => {
     try {
+      setIsLoading(true);
       const authTokens = localStorage.getItem("auth_tokens");
       let token = null;
 
@@ -361,6 +362,17 @@ export default function FileList() {
     }
   };
 
+  const copyToClipboard = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // Qui potresti aggiungere una notifica di successo
+      alert(`${type} copiato negli appunti!`);
+    } catch (err) {
+      console.error("Errore nella copia:", err);
+      alert("Errore nella copia del testo");
+    }
+  };
+
   if (isLoading && files.length === 0) {
     return (
       <Card className="w-full">
@@ -423,7 +435,6 @@ export default function FileList() {
                         )}
                       </div>
                     </div>
-
                     <div className="flex flex-wrap gap-2">
                       {fileStatus === "PENDING" && !isProcessing ? (
                         <Button
@@ -463,36 +474,6 @@ export default function FileList() {
 
                           {isTranscribed && (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  const transcriptionText =
-                                    transcriptions[file.id]?.transcription ||
-                                    "";
-                                  const blob = new Blob([transcriptionText], {
-                                    type: "text/plain",
-                                  });
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement("a");
-                                  a.href = url;
-                                  a.download = `${file.filename.replace(
-                                    /\.[^/.]+$/,
-                                    ""
-                                  )}_trascrizione.txt`;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  document.body.removeChild(a);
-                                  URL.revokeObjectURL(url);
-                                }}
-                                title="Scarica trascrizione"
-                              >
-                                <Download className="h-4 w-4" />
-                                <span className="sr-only">
-                                  Scarica trascrizione
-                                </span>
-                              </Button>
-
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -536,8 +517,28 @@ export default function FileList() {
 
                   {selectedId === file.id && (
                     <div className="mt-4 space-y-4">
-                      <div className="p-4 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap">
-                        <h4 className="font-semibold mb-2">Trascrizione:</h4>
+                      <div className="p-4 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap relative">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-semibold">Trascrizione:</h4>
+                          {transcriptions[file.id]?.status === "COMPLETED" &&
+                            transcriptions[file.id]?.transcription && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  copyToClipboard(
+                                    transcriptions[file.id]?.transcription ||
+                                      "",
+                                    "Trascrizione"
+                                  )
+                                }
+                                className="p-1 h-8 w-8"
+                                title="Copia trascrizione"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            )}
+                        </div>
 
                         {transcriptions[file.id]?.status === "COMPLETED" ? (
                           <p>{transcriptions[file.id]?.transcription}</p>
@@ -562,8 +563,27 @@ export default function FileList() {
                       </div>
 
                       {summaries[file.id]?.summary && (
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-md text-sm text-gray-800 whitespace-pre-wrap">
-                          <h4 className="font-semibold mb-2">Riassunto:</h4>
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-md text-sm text-gray-800 whitespace-pre-wrap relative">
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-semibold">Riassunto:</h4>
+                            {!summaries[file.id]?.isLoading &&
+                              summaries[file.id]?.summary && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      summaries[file.id]?.summary || "",
+                                      "Riassunto"
+                                    )
+                                  }
+                                  className="p-1 h-8 w-8"
+                                  title="Copia riassunto"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                              )}
+                          </div>
 
                           {summaries[file.id]?.isLoading ? (
                             <div className="flex items-center">

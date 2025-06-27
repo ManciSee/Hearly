@@ -186,7 +186,7 @@ def get_transcription(
                     if transcription:
                         return transcription
                     else:
-                        return {"status": status, "message": "Trascrizione non ancora disponibile"}
+                        return {"status": status, "message": "Trascrizione in corso..."}
                 else:
                     return {"status": status, "message": f"Processing in progress: {status}"}
             
@@ -194,7 +194,7 @@ def get_transcription(
             if transcription:
                 return transcription
             else:
-                return {"status": "UNKNOWN", "message": "Job di trascrizione non trovato"}
+                return {"status": "UNKNOWN", "message": "Trascrizione in corso..."}
                 
         except Exception as e:
             return {"status": "ERROR", "message": f"Error checking status: {str(e)}"}
