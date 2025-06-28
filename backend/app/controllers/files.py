@@ -258,16 +258,13 @@ async def get_language_distribution(username: str):
                 }
             )
 
-        # Conta totale trascrizioni
         total_transcriptions = len(items)
 
-        # Calcola la distribuzione linguistica aggregando le trascrizioni
         language_counts = {}
         for item in items:
             lang = item.get("language", "unknown")
             language_counts[lang] = language_counts.get(lang, 0) + 1
 
-        # Calcola percentuali
         language_distribution = {
             lang: round((count / total_transcriptions) * 100, 2)
             for lang, count in language_counts.items()
@@ -321,37 +318,29 @@ async def get_recent_activity(username: str):
     """
     try:
         
-        # Calcola la data di 30 giorni fa
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         thirty_days_ago_timestamp = int(thirty_days_ago.timestamp())
         
-        # Query per recuperare tutti i file dell'utente degli ultimi 30 giorni
         response = files_table.scan(
             FilterExpression=Attr("user_id").eq(username) & Attr("upload_time").gte(thirty_days_ago_timestamp)
         )
         items = response.get("Items", [])
         
-        # Raggruppa per data
         daily_counts = defaultdict(int)
         
-        # Inizializza tutti i giorni degli ultimi 30 con 0
         for i in range(30):
             date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
             daily_counts[date] = 0
         
-        # Conta gli upload per ogni giorno
         for item in items:
             upload_timestamp = item.get("upload_time")
             if upload_timestamp:
-                # Converti Decimal a int se necessario
                 if isinstance(upload_timestamp, Decimal):
                     upload_timestamp = int(upload_timestamp)
                 
-                # Converti timestamp in data
                 upload_date = datetime.fromtimestamp(upload_timestamp).strftime('%Y-%m-%d')
                 daily_counts[upload_date] += 1
         
-        # Converti in lista ordinata per gli ultimi 30 giorni
         activity_data = []
         for i in range(29, -1, -1):  # Dal più vecchio al più recente
             date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -362,7 +351,6 @@ async def get_recent_activity(username: str):
                 "uploads": daily_counts[date]
             })
         
-        # Calcola statistiche aggiuntive
         total_uploads_30_days = sum(daily_counts.values())
         days_with_activity = sum(1 for count in daily_counts.values() if count > 0)
         
@@ -396,7 +384,6 @@ async def delete_file(
     username = get_username_from_token(token)
     
     try:
-        # 1. Prima recupera i metadati del file da DynamoDB per verificare che esista e appartenga all'utente
         try:
             response = files_table.get_item(
                 Key={
@@ -419,7 +406,6 @@ async def delete_file(
         except Exception as e:
             raise HTTPException(status_code=500, detail="Error retrieving file metadata")
         
-        # 2. Elimina il file da S3
         bucket_name = os.getenv("S3_BUCKET_NAME", "cc-bucket-audio")
         file_key = f"{username}/{file_id}_{filename}"
         
@@ -431,31 +417,23 @@ async def delete_file(
         )
         
         try:
-            # Verifica che il file esista prima di eliminarlo
             s3_client.head_object(Bucket=bucket_name, Key=file_key)
-            
-            # Elimina il file da S3
             s3_client.delete_object(Bucket=bucket_name, Key=file_key)
             
         except Exception as e:
-            # Controlla se è un errore 404 (file non trovato)
             if hasattr(e, 'response') and e.response.get('Error', {}).get('Code') == '404':
-                # Continua comunque per eliminare il record da DynamoDB
                 pass
             else:
                 raise HTTPException(status_code=500, detail=f"Error deleting file from S3: {str(e)}")
         
-        # 3. Elimina anche il file di trascrizione da S3 se esiste
         transcription_key = f"{username}/{file_id}.json"
         try:
             s3_client.head_object(Bucket=bucket_name, Key=transcription_key)
             s3_client.delete_object(Bucket=bucket_name, Key=transcription_key)
         except Exception as e:
-            # Controlla se è un errore 404 (file non trovato)
             if hasattr(e, 'response') and e.response.get('Error', {}).get('Code') == '404':
                 pass
         
-        # 4. Elimina il record da DynamoDB
         try:
             files_table.delete_item(
                 Key={
@@ -475,7 +453,6 @@ async def delete_file(
         }
     
     except HTTPException:
-        # Re-raise HTTPExceptions as-is
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error in file deletion: {str(e)}")

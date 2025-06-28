@@ -1,74 +1,4 @@
-### Ingress No static ip
-
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: hearly-ingress
-#   annotations:
-#     kubernetes.io/ingress.class: "gce"
-# spec:
-#   rules:
-#     - http:
-#         paths:
-#           - path: /api
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /files
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /upload
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /transcribe/
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /transcription/
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /summarize/
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /users/
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-backend-service
-#                 port:
-#                   number: 8000
-#           - path: /
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: hearly-frontend-service
-#                 port:
-#                   number: 80
-
-##########################
-### Ingress with static ip
+###
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -76,6 +6,7 @@ metadata:
   name: hearly-ingress
   annotations:
     kubernetes.io/ingress.class: "gce"
+    # Use the static IP address created in the GCP console
     kubernetes.io/ingress.global-static-ip-name: "hearly-ingress-ip"
 spec:
   rules:

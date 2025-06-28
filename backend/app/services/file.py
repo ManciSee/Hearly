@@ -238,13 +238,11 @@ def get_audio_duration(file_bytes: bytes, filename: str) -> float:
     """
     temp_file_path = None
     try:
-        # Crea un file temporaneo per permettere a mutagen di leggere il file
         with tempfile.NamedTemporaryFile(suffix=os.path.splitext(filename)[1], delete=False) as temp_file:
             temp_file.write(file_bytes)
             temp_file.flush()
             temp_file_path = temp_file.name
         
-        # Usa mutagen per ottenere la durata (file ora chiuso)
         audio_file = MutagenFile(temp_file_path)
         
         if audio_file is not None and hasattr(audio_file, 'info'):
@@ -259,7 +257,6 @@ def get_audio_duration(file_bytes: bytes, filename: str) -> float:
         logger.error(f"Errore nel calcolo della durata per {filename}: {str(e)}")
         return 0.0
     finally:
-        # Pulizia del file temporaneo
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
@@ -285,17 +282,14 @@ def get_user_total_duration(username: str) -> dict:
                 total_seconds += int(item['duration'])
                 audio_files_count += 1
                 
-                # Trova l'upload_time più recente
                 upload_time = int(item.get('upload_time', 0))
                 if upload_time > latest_upload_time:
                     latest_upload_time = upload_time
         
-        # Formatta la durata totale
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
         
-        # Converti il timestamp dell'ultimo upload in formato leggibile
         latest_transcription_date = None
         if latest_upload_time > 0:
             from datetime import datetime
