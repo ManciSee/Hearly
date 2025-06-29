@@ -85,6 +85,11 @@ These functions are available in two variants:
 - 📈 Monitor activity through the dashboard
 - 🔐 Register and login securely via **AWS Cognito**
 
+## 📀 Demo
+https://github.com/user-attachments/assets/90a3d3a1-1832-4bb2-b262-e900a7619903
+
+
+
 ## 👥 Authors
 
 <p align="left">
